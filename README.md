@@ -11,6 +11,11 @@ A curated daily Hacker News feed — ranked every day by popularity, freshness, 
 - **One UI, two hosts** — the exact same `src/` runs in a browser and inside the native Android WebView. A tiny JS bridge (`window.Android`) upgrades the experience when running packaged.
 - **Zero-dependency web stack** — plain ES2022+ JavaScript, [Tailwind CSS (CDN)](https://tailwindcss.com/), Material Design Icons, and the Montserrat font.
 - **Smart daily feed** — merges HN `topstories`, `beststories`, and `newstories`, deduplicates, infers topics, scores each story, and greedily selects a diverse set (no domain/topic monopolies).
+- **"Why this story?"** — every card explains its selection: rank, engagement, age, and diversity reasons are surfaced inline.
+- **Topic tabs** — filter the feed by bucket (`AI`, `Security`, `Web`, …) with one-tap chips above the list.
+- **Read · hide · save · share** — each card carries a toolbar: save for later, open the in-app comments, use the native share sheet (or clipboard fallback), or hide a story.
+- **In-app comments** — full HN comment threads load inside the app, with lazily-expanding replies.
+- **Live search** — debounced search across all of Hacker News via the Algolia API, rendered with the same cards.
 - **Cached & offline-friendly** — the daily selection is cached in `localStorage` (5 min TTL); saved posts persist locally too.
 - **Smooth "Apple-like" motion** — entrance, list, and removal animations use the Web Animations API with a springy `cubic-bezier(0.22, 1, 0.36, 1)` easing — no animation libraries.
 - **Privacy-first** — no accounts, no tracking, no analytics; everything stays on the device.
@@ -27,7 +32,7 @@ src/main.js  ────── creates the Router, defines routes, global state
         │
         ├── Router + UI primitives (html, Toast, utils, …)  ◄── provided by the runtime engine
         │
-        ├── pages   Home · Posts · About        (route entry points)
+        ├── pages   Home · Comments · Search · Posts · About   (route entry points)
         │              │
         │              ├── components  Navbar · DownloadBanner · postCard · postGrid
         │              └── utils       getDailyHackerNews (feed pipeline + saved posts)
@@ -62,11 +67,13 @@ Everything below describes **Hnly's own code**.
 │   ├── components/                # Reusable HTML-building functions
 │   │   ├── Navbar.js              # Navbar shell + per-page nav content
 │   │   ├── DownloadBanner.js      # "Get the app" banner (web visitors, once per session)
-│   │   ├── postCard.js            # Single story card (+ skeleton)
-│   │   └── postGrid.js            # Grid / skeleton / empty-state renderers
+│   │   ├── postCard.js            # Story card: toolbar, read state, "why" panel (+ skeleton)
+│   │   └── postGrid.js            # Grid w/ saved+read Sets, skeleton, empty-state renderers
 │   ├── pages/                     # One function per route
-│   │   ├── Home.js                # Feed: render, stagger-in, refresh, retry
-│   │   ├── Posts.js               # Saved posts + animated removal
+│   │   ├── Home.js                # Feed: topic tabs, hidden bar, refresh, delegated card actions
+│   │   ├── Comments.js            # In-app HN thread: story header + lazily-expanding replies
+│   │   ├── Search.js              # Live Algolia story search (debounced, load-more)
+│   │   ├── Posts.js               # Saved posts + animated removal + toolbar actions
 │   │   └── About.js               # iOS-style settings page + actions
 │   └── utils/
 │       └── getDailyHackerNews.js  # Fetch → dedupe → tag → score → diversify → cache
@@ -92,24 +99,28 @@ Routes are registered in `main.js`:
 ```js
 r.add("home", Home, { cache: false })
   .add("posts", Posts, { cache: false })
+  .add("comments", Comments, { cache: false })
+  .add("search", Search, { cache: false })
   .add("about", About, { cache: false })
 ```
 
 - Each page is a **function** `(params, el) => …` that returns a template string and receives the mounted element.
-- `{ cache: false }` forces re-render on every visit — so Home animates its cards fresh each time and About always reflects the latest version.
+- `{ cache: false }` forces re-render on every visit — so Home re-animates its cards, Comments re-reads the selected story, and About always reflects the latest version.
 - Navbar buttons use `data-route` to navigate (the engine wires them up).
+- Comments and Search read the inline story from the `SELECTED_POST` module global (Home/Search/Posts set it before navigating), mirrored to `sessionStorage` (`hnly_selected_post`) so a hard refresh keeps context.
 
 ### Templates
 
 Statically-oriented HTML is written with `html` (a tagged template from the engine). Dynamic lists are built with `.map()` + `.join("")`:
 
 ```js
-const PostGrid = () => {
+const PostGrid = (posts = POSTS) => {
   const savedIds = getSavedPostIdSet(); // read once per render
+  const readIds = getReadIdSet();
   return html`
-    ${POSTS.length
+    ${posts.length
       ? html`<div class="columns …">
-          ${POSTS.map((post) => PostCard(post, savedIds)).join("")}
+          ${posts.map((post) => PostCard(post, savedIds, readIds)).join("")}
         </div>`
       : EmptyState("mdi-newspaper-variant-outline", "No stories found")}
   `;
@@ -164,18 +175,19 @@ Because the check is `window.Android` (a property, so it's *undefined* in any re
 
 - `APP_INFO` — name, version, tagline, Solana wallet, plus placeholders for the download and feedback URLs.
 - `POSTS` / `LOADING` — module-level state shared by Home and the grid/skeleton renderers.
+- `SELECTED_POST` — the story currently open in the Comments page; set by Home/Search/Posts before navigating to `#comments`, mirrored to `sessionStorage` so it survives a hard refresh.
 
 ### 2. The feed pipeline (`utils/getDailyHackerNews.js`)
 
 This file is intentionally pure-ish and separated from the UI:
 
-1. **Fetch** — pull story IDs from `topstories`, `beststories`, `newstories` concurrently (`Promise.allSettled`, so one dead feed can't kill the rest); details are fetched with **bounded concurrency** (`FETCH_CONCURRENCY: 12`) and a per-request timeout.
+1. **Fetch** — pull story IDs from `topstories`, `beststories`, and `newstories` concurrently (`Promise.allSettled`, so one dead feed can't kill the rest); details are fetched with **bounded concurrency** (`FETCH_CONCURRENCY: 12`) and a per-request timeout. Each story remembers its source feeds as `_feeds`.
 2. **Normalize** — keep only valid, non-dead `story` items; attach domain + description; sanitize untrusted content (`stripTags` strips HTML/control characters from title, text, author, and `isSafeUrl` only allows `http(s)://` — everything else falls back to the HN item link, so `javascript:`/`data:` never survive).
 3. **Dedupe** — by ID and by normalized title.
-4. **Topic-tag** — keyword patterns map titles to buckets like `ai`, `programming`, `security`, `crypto`, …
-5. **Score** — weighted blend of *popularity* (log-scaled), *freshness* (decays over a 72 h window), *discussion* (log-scaled comments), and a touch of *randomness*.
-6. **Diversify** — greedy selection that penalizes a second story from the same domain or topic, so the day's picks stay varied.
-7. **Cache** — the result is cached in `localStorage` with a 5-minute TTL to spare the HN API (and your data).
+4. **Topic-tag** — keyword patterns map titles to buckets like `ai`, `programming`, `security`, `crypto`, … (stored as `_topic`).
+5. **Score** — weighted blend of *popularity* (log-scaled), *freshness* (decays over a 72 h window), *discussion* (log-scaled comments), and a touch of *randomness*. Stories are then ranked (`_rank`).
+6. **Diversify** — greedy selection that penalizes a second story from the same domain or topic. Each pick records *why* it won (`_why`: rank, engagement, age, diversity) — that's the "Why this story?" panel on the card.
+7. **Cache** — the result is cached in `localStorage` with a 5-minute TTL to spare the HN API (and your data). The cache key was bumped to `daily_hacker_news_v2` when `_topic`/`_feeds`/`_rank`/`_why` were introduced, so stale pre-feature entries are ignored.
 
 ```js
 const SCORE_WEIGHTS = {
@@ -187,24 +199,33 @@ const SCORE_WEIGHTS = {
 
 `toggleSavePost` / `getSavedPosts` / `getSavedPostIdSet` read/write `saved_hacker_news_posts` in `localStorage` behind a small `safeStorage` wrapper that swallows privacy-mode `localStorage` errors. On render, the grid builds the ID set **once** and hands it to every card (`savedIds.has(id)`), instead of re-parsing `localStorage` per card.
 
-### 4. Security hardening
+### 4. Read & hidden state (`getDailyHackerNews.js`)
 
-- **Content-Security-Policy** (`index.html`) — `default-src 'self'`; scripts are limited to `'self'`, Tailwind, the engine CDN, and two explicitly *hashed* inline snippets — **no `'unsafe-inline'`**, so injected `<script>` tags are blocked outright. `frame-src`/`object-src` are `'none'`, and `connect-src` is pinned to the HN API, the engine CDN, jsDelivr (icons), and the deployed origin.
-- **Output escaping** (`postCard.js`) — every HN-supplied value (title, description, timestamp, IDs, URLs) passes through `escapeHTML` before interpolation, so data can't break out of its text or attribute context even if the cache were tampered with.
+Opening a story's comments or article marks it read (`markPostRead`) and stores the ID in `hnly_read_posts`; hiding a story (`hidePost`) stores it in `hnly_hidden_posts`. `getReadIdSet()` / `getHiddenIdSet()` return `Set<string>`s that cards use for read-dimming and the Home hidden-bar. Home's "Show" toggle reveals hidden cards; this is all local-first state — nothing is sent anywhere.
+
+### 5. Security hardening
+
+- **Content-Security-Policy** (`index.html`) — `default-src 'self'`; scripts are limited to `'self'`, Tailwind, the engine CDN, and two explicitly *hashed* inline snippets — **no `'unsafe-inline'`**, so injected `<script>` tags are blocked outright. `frame-src`/`object-src` are `'none'`, and `connect-src` is pinned to the HN API, the Algolia search API, the engine CDN, jsDelivr (icons), and the deployed origin.
+- **Output escaping** (`utils/getDailyHackerNews.js`) — every HN-supplied value (title, description, timestamp, IDs, URLs, author, comment text) passes through one shared `escapeHTML` before interpolation, so data can't break out of its text or attribute context even if the cache were tampered with.
 - **Input sanitizing** (`getDailyHackerNews.js`) — see normalize step above; the cached copy in `localStorage` is already clean.
 
-### 5. Performance notes
+### 6. Performance notes
 
-- **One listener instead of ~200** (`Home.js`) — card clicks go through a single delegated listener on the persistent `#posts-container`, which survives every `innerHTML` swap.
-- **Batch-safe saved state** (`postGrid.js` + `postCard.js`) — `getSavedPostIdSet()` builds a `Set<string>` once per render; cards only do an O(1) `has()` check.
+- **One listener instead of ~200** (`Home.js`) — card clicks go through a single delegated listener on the persistent `#posts-container`, which survives every `innerHTML` swap. Search and Posts use the same delegated pattern.
+- **Batch-safe saved/read state** (`postGrid.js` + `postCard.js`) — `getSavedPostIdSet()` and `getReadIdSet()` build `Set`s once per render; cards only do O(1) `has()` checks.
 - **Bounded entrance animations** (`Home.js`) — only the first 18 cards animate; below-the-fold cards render instantly.
+- **Lazy comments** (`Comments.js`) — replies are fetched only when their "Reply thread" toggle is expanded, and nesting is capped at 4 levels deep.
 - **O(1) diverse selection** (`getDailyHackerNews.js`) — chosen stories are removed by swap-with-tail + `pop` instead of `splice`'s O(n) shift.
 
-### 6. Feature behaviors
+### 7. Feature behaviors
 
 - **Download banner** (`DownloadBanner.js`) — rendered only when `!window.Android` (i.e. not already inside the app), **once per session** via a `sessionStorage` flag, then animated in with the spring easing. The CTA opens `APP_INFO.downloadUrl` when set, otherwise toasts "coming soon".
 - **Check for updates** (`About.js`) — fetches `version.json`, normalizes both versions numerically (`1.0` == `1.0.0`) and toasts the result; shows a spinner on the row while checking.
 - **Send feedback** — opens `APP_INFO.feedbackUrl` (in-app browser on Android, new tab on web). Updates for these placeholder URLs are flagged with `TODO` in `main.js`.
+- **Topic tabs & hidden bar** (`Home.js`) — chips above the feed filter by `_topic`; the hidden bar shows how many stories are hidden and toggles them back.
+- **Toolbar** (`postCard.js`) — every card: ℹ️ "Why this story?" (`data-why`), Read Article (marks read + dims the title), and a bookmark/comments/share/hide row. Save/share/hide/comments all work from Home, Search, and Saved without per-card listeners.
+- **In-app comments** (`Comments.js`) — the selected story is rendered as a header card and its thread is fetched from the Algolia-adjacent Firebase item API; top-level comments show immediately and replies expand lazily. All comment text is escaped; `data-replies-toggle` drives collapse/expand.
+- **Search** (`Search.js`) — queries `https://hn.algolia.com/api/v1/search?tags=story` (350 ms debounce, 20 hits per page, "Load more"), maps hits to the post shape, and reuses `PostCard` — so search results get the exact same toolbar and read/dim behavior as the feed.
 
 ---
 

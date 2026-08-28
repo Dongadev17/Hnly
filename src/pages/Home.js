@@ -1,3 +1,39 @@
+const TOPIC_LABELS = {
+  all: "All",
+  other: "Other",
+  ai: "AI",
+  programming: "Programming",
+  security: "Security",
+  hardware: "Hardware",
+  startups: "Startups",
+  science: "Science",
+  web: "Web",
+  openSource: "Open Source",
+  databases: "Databases",
+  crypto: "Crypto",
+  society: "Society",
+};
+const TOPIC_ORDER = () => ["all", ...getTopics()];
+
+const renderTopicChips = (active) => html`
+  <div class="scrollbar-hide flex gap-1.5 overflow-x-auto pb-2">
+    ${TOPIC_ORDER().map(
+      (key) => html`
+        <button
+          type="button"
+          data-topic="${key}"
+          class="shrink-0 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors active:scale-95 ${key ===
+          active
+            ? "bg-white text-black"
+            : "bg-[#2c2c2e] text-white/60"}"
+        >
+          ${TOPIC_LABELS[key] ?? key}
+        </button>
+      `,
+    ).join("")}
+  </div>
+`;
+
 const Home = (params, el) => {
   const Page = html`
     <div class="min-h-screen">
@@ -9,6 +45,10 @@ const Home = (params, el) => {
 
       <!-- Content -->
       <main class="px-3 pb-8 pt-2">
+        <!-- Topic / feed chips -->
+        <div id="filterBar">${renderTopicChips("all")}</div>
+        <div id="hiddenBar"></div>
+
         <div id="posts-container">${PostGrid()}</div>
       </main>
       <br />
@@ -19,6 +59,76 @@ const Home = (params, el) => {
     const container = el.querySelector("#posts-container");
     const refreshBtn = el.querySelector("#refreshBtn");
     const refreshIcon = el.querySelector("#refreshIcon");
+    const filterBar = el.querySelector("#filterBar");
+    const hiddenBar = el.querySelector("#hiddenBar");
+
+    let activeTopic = "all";
+    let showingHidden = false;
+
+    const shareStory = async (post) => {
+    const text = `${post.title}\n${post.url}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: post.title, text, url: post.url });
+        return;
+      } catch {
+        // user cancelled or unsupported — fall through
+      }
+    }
+
+    if (window.Android && Android.shareText) {
+      Android.shareText(post.title, text);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      Toast.show("Story copied — share it anywhere");
+    } catch {
+      Toast.show("Couldn't share this story");
+    }
+  };
+
+  const openStoryComments = (postId) => {
+    const post =
+      POSTS.find((item) => String(item.id) === String(postId)) ||
+      getSavedPosts().find((item) => String(item.id) === String(postId));
+
+    if (!post) {
+      console.warn("Post not found:", postId);
+      Toast.show("Story not available");
+      return;
+    }
+
+    markPostRead(postId);
+    SELECTED_POST = post;
+
+    try {
+      sessionStorage.setItem("hnly_selected_post", JSON.stringify(post));
+    } catch {}
+
+    window.location.hash = "#comments";
+  };
+
+  const renderHiddenBar = (count) => {
+      if (!count) return "";
+      return html`
+        <div
+          class="mb-2 flex items-center justify-between rounded-[14px] bg-[#1c1c1e] px-3 py-2"
+        >
+          <span class="text-[11px] text-white/40">
+            ${count} hidden ${showingHidden ? "· showing" : ""}
+          </span>
+          <button
+            id="showHiddenBtn"
+            type="button"
+            class="text-[12px] font-semibold text-[#ff6600]"
+          >
+            ${showingHidden ? "Restore" : "Show"}
+          </button>
+        </div>`;
+    };
 
     // ------------------------------------------
     // Download banner (web visitors only)
@@ -40,7 +150,19 @@ const Home = (params, el) => {
     // ------------------------------------------
 
     const renderPosts = () => {
-      container.innerHTML = PostGrid();
+      const hid = getHiddenIdSet();
+
+      const visible = POSTS.filter((post) => {
+        if (activeTopic !== "all" && post._topic !== activeTopic) {
+          return false;
+        }
+        if (!showingHidden && hid.has(String(post.id))) return false;
+        return true;
+      });
+
+      container.innerHTML = PostGrid(visible);
+      filterBar.innerHTML = renderTopicChips(activeTopic);
+      hiddenBar.innerHTML = renderHiddenBar(hid.size);
       animateCardsIn();
     };
 
@@ -118,14 +240,69 @@ const Home = (params, el) => {
         return;
       }
 
+      const commentsBtn = e.target.closest("[data-comments]");
+
+      if (commentsBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        openStoryComments(commentsBtn.dataset.comments);
+        return;
+      }
+
+      const shareBtn = e.target.closest("[data-share]");
+
+      if (shareBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const post = POSTS.find(
+          (item) => String(item.id) === String(shareBtn.dataset.share),
+        );
+        if (post) shareStory(post);
+        return;
+      }
+
+      const hideBtn = e.target.closest("[data-hide]");
+
+      if (hideBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        hidePost(hideBtn.dataset.hide);
+        renderPosts();
+        return;
+      }
+
+      const whyBtn = e.target.closest("[data-why]");
+
+      if (whyBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const panel = whyBtn.closest("article")?.querySelector(
+          "[data-why-panel]",
+        );
+        if (panel) panel.classList.toggle("hidden");
+        return;
+      }
+
       const link = e.target.closest("[data-url]");
 
       if (link) {
         e.preventDefault();
 
         const url = link.dataset.url;
+        const postId = link.dataset.postid;
 
         if (!url) return;
+
+        if (postId) {
+          markPostRead(postId);
+
+          const card = link.closest("article");
+          if (card) {
+            card
+              .querySelector("[data-story-title]")
+              ?.classList.replace("text-white", "text-white/55");
+          }
+        }
 
         setTimeout(() => {
           if (typeof Android !== "undefined" && Android.openInBrowser) {
@@ -135,6 +312,19 @@ const Home = (params, el) => {
           }
         }, 250);
       }
+    });
+
+    filterBar.addEventListener("click", (e) => {
+      const chip = e.target.closest("[data-topic]");
+      if (!chip) return;
+      activeTopic = chip.dataset.topic;
+      renderPosts();
+    });
+
+    hiddenBar.addEventListener("click", (e) => {
+      if (!e.target.closest("#showHiddenBtn")) return;
+      showingHidden = !showingHidden;
+      renderPosts();
     });
 
     // ------------------------------------------
@@ -156,7 +346,7 @@ const Home = (params, el) => {
         });
 
         if (POSTS && POSTS.length) {
-          localStorage.removeItem("daily_hacker_news");
+          localStorage.removeItem(HN_CONFIG.CACHE_KEY);
         }
 
         LOADING = false;

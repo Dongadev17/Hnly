@@ -4,8 +4,10 @@
  * Configuration
  * ============================================================ */
 const HN_CONFIG = {
-  CACHE_KEY: "daily_hacker_news",
+  CACHE_KEY: "daily_hacker_news_v2", // v2: posts now carry _topic/_feeds/_rank/_why
   SAVED_POSTS_KEY: "saved_hacker_news_posts",
+  READ_POSTS_KEY: "hnly_read_posts",
+  HIDDEN_POSTS_KEY: "hnly_hidden_posts",
   CACHE_TTL_MS: 5 * 60 * 1000, // how long a cached result is considered fresh
   FEEDS: ["topstories", "beststories", "newstories"],
   MAX_CANDIDATES: 180, // cap on how many story IDs we fetch details for
@@ -227,9 +229,19 @@ const fetchJSON = async (url, timeout = HN_CONFIG.FETCH_TIMEOUT_MS) => {
 };
 
 /**
+ * Fetches a single HN item by ID (story, comment, …).
+ * @param {number|string} id
+ * @returns {Promise<object>}
+ */
+const fetchItem = (id) =>
+  fetchJSON(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
+
+/**
  * Fetches and merges story IDs from all configured HN feeds.
  * Uses allSettled so one dead feed doesn't take down the others.
- * @returns {Promise<number[]>} deduped, capped list of candidate story IDs
+ * @returns {Promise<{ ids: number[], feedMap: Map<number, Set<string>> }>}
+ *   `ids` (deduped, capped, in merge order) and `feedMap` (story id → the
+ *   feeds it appeared in, used for the "why this story" reasons).
  */
 const fetchStoryIds = async () => {
   const results = await Promise.allSettled(
@@ -239,15 +251,22 @@ const fetchStoryIds = async () => {
   );
 
   const ids = [];
+  const feedMap = new Map();
+
   results.forEach((result, i) => {
     if (result.status === "fulfilled" && Array.isArray(result.value)) {
-      ids.push(...result.value);
+      const feed = HN_CONFIG.FEEDS[i];
+      result.value.forEach((id) => {
+        if (!ids.includes(id)) ids.push(id);
+        if (!feedMap.has(id)) feedMap.set(id, new Set());
+        feedMap.get(id).add(feed);
+      });
     } else if (result.status === "rejected") {
       console.warn(`[HN] ${HN_CONFIG.FEEDS[i]} failed:`, result.reason);
     }
   });
 
-  return [...new Set(ids)].slice(0, HN_CONFIG.MAX_CANDIDATES);
+  return { ids: ids.slice(0, HN_CONFIG.MAX_CANDIDATES), feedMap };
 };
 
 /**
@@ -289,9 +308,10 @@ const mapSettled = async (items, limit, fn) => {
  * Requests run with bounded concurrency (HN_CONFIG.FETCH_CONCURRENCY) to
  * avoid hammering the API with hundreds of parallel connections.
  * @param {number[]} ids
+ * @param {Map<number, Set<string>>} [feedMap] story id → feeds it appeared in
  * @returns {Promise<object[]>}
  */
-const fetchStories = async (ids) => {
+const fetchStories = async (ids, feedMap = new Map()) => {
   const results = await mapSettled(ids, HN_CONFIG.FETCH_CONCURRENCY, (id) =>
     fetchJSON(`https://hacker-news.firebaseio.com/v0/item/${id}.json`),
   );
@@ -309,7 +329,9 @@ const fetchStories = async (ids) => {
     ) {
       continue;
     }
-    posts.push(normalizeStory(story));
+    const post = normalizeStory(story);
+    post._feeds = Array.from(feedMap.get(story.id) || []);
+    posts.push(post);
   }
   return posts;
 };
@@ -325,6 +347,44 @@ const stripTags = (value) =>
     .replace(/<\/?[a-zA-Z][^>]*>/g, "")
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
     .trim();
+
+/**
+ * HTML-escapes untrusted text so it can't break out of its text/attribute
+ * context regardless of how the template helper interpolates it.
+ * @param {unknown} value
+ * @returns {string}
+ */
+const escapeHTML = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[c],
+  );
+
+/**
+ * Formats a Unix timestamp as a short relative time ("3h ago").
+ * @param {number} secs
+ * @returns {string}
+ */
+const timeAgo = (secs) => {
+  const diff = Math.max(0, Date.now() - secs * 1000);
+  const minutes = Math.floor(diff / 60000);
+
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+};
 
 /**
  * Only http/https URLs may open from the app; anything else (javascript:,
@@ -495,6 +555,18 @@ const selectDiverse = (scoredPosts, count) => {
     remaining[bestIndex] = remaining[remaining.length - 1];
     remaining.pop();
 
+    // Human-readable "why this story?" justification, shown on the card.
+    const reasons = [];
+    if (chosen._rank) reasons.push(`#${chosen._rank} overall on HN right now`);
+    if (chosen.score || chosen.comments) {
+      reasons.push(`${chosen.score} points · ${chosen.comments} comments`);
+    }
+    if (chosen.time) reasons.push(`Posted ${timeAgo(chosen.time)}`);
+    if (chosen._feeds && chosen._feeds.length > 1) {
+      reasons.push(`Heats up ${chosen._feeds.length} HN feeds at once`);
+    }
+    chosen._why = reasons.slice(0, 3);
+
     selected.push(chosen);
     domainCounts.set(
       chosen._domain,
@@ -534,26 +606,33 @@ const getDailyHackerNews = async (
   }
 
   // --- Fetch + build candidate pool ---
-  const candidateIds = await fetchStoryIds();
+  const { ids: candidateIds, feedMap } = await fetchStoryIds();
   if (candidateIds.length === 0) {
     throw new Error("Unable to retrieve Hacker News story IDs");
   }
 
-  let posts = await fetchStories(candidateIds);
+  let posts = await fetchStories(candidateIds, feedMap);
   if (posts.length === 0) {
     throw new Error("No valid Hacker News stories found");
   }
 
-  // --- Process: dedupe -> tag -> score -> diversify ---
+  // --- Process: dedupe -> tag -> score -> rank -> diversify ---
   posts = deduplicatePosts(posts);
   tagTopics(posts);
   posts = scorePosts(posts);
+
+  // Rank by raw score before diversity adjustments so "why this story?" can
+  // quote how a pick placed in the full candidate pool.
+  posts.sort((a, b) => b._baseScore - a._baseScore);
+  posts.forEach((post, index) => {
+    post._rank = index + 1;
+    if (!Array.isArray(post._feeds)) post._feeds = [];
+  });
+
   const selected = selectDiverse(posts, count);
 
-  // Strip internal-only fields before returning/caching
-  const finalPosts = selected.map(
-    ({ _domain, _topic, _baseScore, ...post }) => post,
-  );
+  // Keep enriched fields (topic/rank/feeds/why) for the UI; drop scoring math.
+  const finalPosts = selected.map(({ _baseScore, ...post }) => post);
 
   safeStorage.set(HN_CONFIG.CACHE_KEY, {
     timestamp: Date.now(),
@@ -605,3 +684,44 @@ const toggleSavePost = (post) => {
   safeStorage.set(HN_CONFIG.SAVED_POSTS_KEY, savedPosts);
   return saved;
 };
+
+/* ============================================================
+ * Read / hidden state
+ * ============================================================ */
+
+/** @returns {Set<string>} all read post IDs */
+const getReadIdSet = () => new Set(safeStorage.get(HN_CONFIG.READ_POSTS_KEY) || []);
+
+/**
+ * Marks a post as read (idempotent).
+ * @param {string|number} id
+ */
+const markPostRead = (id) => {
+  const ids = getReadIdSet();
+  ids.add(String(id));
+  safeStorage.set(HN_CONFIG.READ_POSTS_KEY, [...ids]);
+};
+
+/** @returns {Set<string>} all hidden post IDs */
+const getHiddenIdSet = () =>
+  new Set(
+    (safeStorage.get(HN_CONFIG.HIDDEN_POSTS_KEY) || []).map((entry) =>
+      String(entry.id ?? entry),
+    ),
+  );
+
+/**
+ * Adds a post to the hidden list.
+ * @param {string|number} id
+ */
+const hidePost = (id) => {
+  const list = safeStorage.get(HN_CONFIG.HIDDEN_POSTS_KEY) || [];
+  const entry = { id: String(id), hiddenAt: Date.now() };
+  safeStorage.set(HN_CONFIG.HIDDEN_POSTS_KEY, [
+    ...list.filter((item) => String(item.id ?? item) !== String(id)),
+    entry,
+  ]);
+};
+
+/** @returns {string[]} topic keys for the filter chips ("All" is implied) */
+const getTopics = () => Object.keys(TOPIC_PATTERNS);

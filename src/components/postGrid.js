@@ -21,27 +21,33 @@ const PostSkeletonGrid = (count = 7) =>
 
 const SavedPostGrid = (posts) => {
   const savedIds = getSavedPostIdSet();
+  const readIds = getReadIdSet();
 
   return posts.length
     ? html`<div
         data-saved-grid
         class="p-1.5 columns columns-1 md:columns-2 lg:columns-3 xl:columns-4 space-y-3 gap-x-3"
       >
-        ${posts.map((post) => PostCard(post, savedIds)).join("")}
+        ${posts
+          .map((post) => PostCard(post, savedIds, readIds))
+          .join("")}
       </div>`
     : EmptyState("mdi-bookmark-remove-outline", "No posts saved");
 };
 
-const PostGrid = () => {
+const PostGrid = (posts = POSTS) => {
   const savedIds = getSavedPostIdSet();
+  const readIds = getReadIdSet();
 
   return html`${LOADING
     ? PostSkeletonGrid()
-    : POSTS.length
+    : posts.length
       ? html`<div
           class="columns columns-1 md:columns-2 lg:columns-3 xl:columns-4 space-y-3 gap-x-3"
         >
-          ${POSTS.map((post) => PostCard(post, savedIds)).join("")}
+          ${posts
+            .map((post) => PostCard(post, savedIds, readIds))
+            .join("")}
         </div>`
       : EmptyState("mdi-newspaper-variant-outline", "No stories found")}`;
 };

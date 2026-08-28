@@ -13,7 +13,7 @@
         style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://zap.fihelay497.workers.dev https://fonts.googleapis.com https://cdn.jsdelivr.net;
         font-src https://fonts.gstatic.com https://cdn.jsdelivr.net data:;
         img-src 'self' data: https:;
-        connect-src 'self' https://zap.fihelay497.workers.dev https://hacker-news.firebaseio.com https://hnly.netlify.app https://cdn.jsdelivr.net;
+        connect-src 'self' https://zap.fihelay497.workers.dev https://hacker-news.firebaseio.com https://hnly.netlify.app https://cdn.jsdelivr.net https://hn.algolia.com;
         frame-src 'none';
         object-src 'none';
         base-uri 'self';
@@ -55,6 +55,8 @@
 
     <!-- Pages -->
     <script src="pages/Home.js"></script>
+    <script src="pages/Comments.js"></script>
+    <script src="pages/Search.js"></script>
     <script src="pages/Posts.js"></script>
     <script src="pages/About.js"></script>
 

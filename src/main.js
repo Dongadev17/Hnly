@@ -14,6 +14,8 @@ const APP_INFO = {
 
 let POSTS = [];
 let LOADING = true;
+// The story being viewed in the Comments page (set from Home/Search).
+let SELECTED_POST = null;
 
 const r = new Router("#app", {
   onSecondDataRouteClick: () => {},
@@ -22,5 +24,7 @@ const { afterPageLoad } = utils();
 
 r.add("home", Home, { cache: false })
   .add("posts", Posts, { cache: false })
+  .add("comments", Comments, { cache: false })
+  .add("search", Search, { cache: false })
   .add("about", About, { cache: false })
   .start("home") 
