@@ -4,6 +4,8 @@ const APP_INFO = {
   tagline: "Your daily dose of tech stories",
   // Replace with your real Solana wallet address
   solanaWallet: "8nosMJPbhitDwzCirUDMeePLJy4jYTibT3A2wxAZhHXX",
+  // Ko-fi support page (Donate section on About)
+  koFiUrl: "https://ko-fi.com/H2H31QTSBI",
   // TODO: Replace with the real APK / GitHub release download URL
   downloadUrl: "",
   // TODO: Replace with the real GitHub Issues URL (or another feedback link)
@@ -21,4 +23,4 @@ const { afterPageLoad } = utils();
 r.add("home", Home, { cache: false })
   .add("posts", Posts, { cache: false })
   .add("about", About, { cache: false })
-  .start("home");
+  .start("home") 

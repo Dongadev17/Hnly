@@ -93,6 +93,14 @@ const About = (params, el) => {
         e.preventDefault();
         e.stopPropagation();
         openExternalLink(APP_INFO.feedbackUrl);
+        return;
+      }
+
+      const koFiBtn = e.target.closest("#koFiBtn");
+      if (koFiBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        openExternalLink(APP_INFO.koFiUrl);
       }
     });
   });
@@ -205,11 +213,11 @@ const About = (params, el) => {
           </div>
         </section>
 
-        <!-- Section: Support -->
+        <!-- Section: Donate -->
         <h3
           class="px-4 pb-1.5 pt-5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/35"
         >
-          Support
+          Donate
         </h3>
 
         <section
@@ -225,8 +233,26 @@ const About = (params, el) => {
 
             <p class="mt-2 text-[13px] leading-relaxed text-white/55">
               ${APP_INFO.name} is free and has no ads. If you enjoy it, you can
-              support development by donating via the Solana network.
+              support development via Ko-fi or the Solana network.
             </p>
+
+            <button
+              type="button"
+              id="koFiBtn"
+              class="ripple-container mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#212121] text-sm font-semibold text-white transition-all active:scale-[0.98]"
+            >
+              <span class="mdi mdi-coffee-outline text-lg text-[#ff6600]"></span>
+              Support me on Ko-fi
+            </button>
+
+            <div class="mt-4 flex items-center gap-3">
+              <span class="h-px flex-1 bg-white/10"></span>
+              <span
+                class="text-[11px] uppercase tracking-[0.08em] text-white/30"
+                >or</span
+              >
+              <span class="h-px flex-1 bg-white/10"></span>
+            </div>
 
             <div
               class="mt-4 flex items-center justify-between gap-3 rounded-full bg-[#2c2c2e] py-2 pl-4 pr-2"
@@ -256,6 +282,12 @@ const About = (params, el) => {
             </p>
           </div>
         </section>
+
+        <p
+          class="px-4 pb-2 pt-6 text-center text-[11px] text-white/25"
+        >
+          © ${new Date().getFullYear()} ${APP_INFO.name}. All rights reserved.
+        </p>
       </main>
       <br />
     </div>
