@@ -1,0 +1,22 @@
+# Build output
+dist/
+
+# Android / Gradle build artifacts
+android/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+*.keystore
+*.jks
+
+# Dependencies
+node_modules/
+
+# Editor / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db

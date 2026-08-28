@@ -1,0 +1,8 @@
+* {
+  font-family: "Montserrat", sans-serif;
+  user-select: none !important;
+}
+
+*:disabled {
+  opacity: 60%;
+}

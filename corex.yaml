@@ -1,0 +1,24 @@
+
+name: Hnly
+version: 1.0.0
+build:
+  dist_dir: dist
+  minify: true
+  bundle: true
+  sourcemaps: false
+  hashing: false
+  image_optimization: true
+  obf_keywords: []
+  obf_vars: []
+  obfuscate_class_names: false
+  ignore_classnames: ["ignoredClass1", "ignoredClass2"]
+android:
+  package_name: com.corex.hnly
+  app_name: Hnly
+  only_host_server: false
+  icon_path: assets/logo.png
+  is_online_site: true
+  src_dir: src
+  webview_url: https://hnly.netlify.app
+  debug: false
+  statusbar_color: "#000000"

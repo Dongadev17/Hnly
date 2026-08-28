@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "no-unused-vars": "off"
+  },
+  "plugins": ["react", "promise", "node"],
+  "ignorePatterns": ["dist/**", "node_modules/**"]
+}
