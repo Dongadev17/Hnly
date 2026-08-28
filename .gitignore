@@ -14,6 +14,10 @@ android/captures/
 # Dependencies
 node_modules/
 
+# Local, personal-use tooling
+commitpush.bat
+corex.yaml
+
 # Editor / OS
 .idea/
 *.iml
