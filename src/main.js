@@ -7,9 +7,9 @@ const APP_INFO = {
   // TODO: Replace with the real APK / GitHub release download URL
   downloadUrl: "",
   // TODO: Replace with the real GitHub Issues URL (or another feedback link)
-  feedbackUrl: "",
+  feedbackUrl: "https://github.com/Dongadev17/Hnly/issues/1",
 };
- 
+
 let POSTS = [];
 let LOADING = true;
 

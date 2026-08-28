@@ -53,7 +53,8 @@ Everything below describes **Hnly's own code**.
 ```
 .
 ├── src/
-│   ├── index.html                 # Entry point — load order & global destructuring
+│   ├── index.html                 # Entry point — script order + Content-Security-Policy
+│   ├── engine-bootstrap.js        # Destructures engine globals (Router, html, Toast, …)
 │   ├── main.js                    # APP_INFO, global POSTS/LOADING state, router setup
 │   ├── style.css                  # Global styles (font, selection, disabled)
 │   ├── version.json               # Latest deployed version (used by "Check for updates")
@@ -76,11 +77,9 @@ Everything below describes **Hnly's own code**.
 
 `index.html` is the contract. Scripts are plain browser globals, so **order matters**:
 
-1. Third-party CDNs (Tailwind, fonts, icons).
-2. `style.css` + the engine's CSS/JS.
+1. Third-party CDNs (Tailwind, fonts, icons), `style.css`, and the engine's CSS/JS.
+2. `engine-bootstrap.js` — the engine bundle exposes globals like `Router`, `html`, `Toast`, and `utils`. This file destructures them **once** into top-level constants (an external file rather than an inline script, so the page's CSP never needs `'unsafe-inline'` for it). After it runs, every app file can use them.
 3. `components/*` → `pages/*` → `utils/*` → `main.js`.
-
-The engine exposes names like `Router`, `html`, `Toast`, and `utils`, destructured once in `index.html` (it also exposes unrelated primitives). After that, every file just uses them.
 
 ---
 
@@ -105,13 +104,16 @@ r.add("home", Home, { cache: false })
 Statically-oriented HTML is written with `html` (a tagged template from the engine). Dynamic lists are built with `.map()` + `.join("")`:
 
 ```js
-const PostGrid = () => html`
-  ${POSTS.length
-    ? html`<div class="columns …">
-        ${POSTS.map(PostCard).join("")}
-      </div>`
-    : EmptyState("mdi-newspaper-variant-outline", "No stories found")}
-`;
+const PostGrid = () => {
+  const savedIds = getSavedPostIdSet(); // read once per render
+  return html`
+    ${POSTS.length
+      ? html`<div class="columns …">
+          ${POSTS.map((post) => PostCard(post, savedIds)).join("")}
+        </div>`
+      : EmptyState("mdi-newspaper-variant-outline", "No stories found")}
+  `;
+};
 ```
 
 ### Styling system
@@ -129,17 +131,18 @@ const PostGrid = () => html`
 All animation is Web Animations API (`.animate()`), so it's GPU-friendly and interruptible:
 
 ```js
-// Home.js — staggered card entrance
+// Home.js — staggered card entrance (first 18 cards only)
+const MAX_ANIMATED = 18;
 card.animate(
   [
     { opacity: 0, transform: "translateY(18px) scale(0.98)" },
     { opacity: 1, transform: "translateY(0) scale(1)" },
   ],
-  { duration: 380, delay: Math.min(i * 35, 420), easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "backwards" }
+  { duration: 380, delay: Math.min(i * 30, 420), easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "backwards" }
 );
 ```
 
-The same spring easing reappears in the Download banner drop-in and the saved-post collapse on `Posts.js`.
+Only the first viewport-worthy batch (18 cards) animates; the rest appear instantly, so off-screen cards don't each spawn a WAAPI layer. The same spring easing reappears in the Download banner drop-in and the saved-post collapse on `Posts.js`.
 
 ### The Android bridge
 
@@ -167,7 +170,7 @@ Because the check is `window.Android` (a property, so it's *undefined* in any re
 This file is intentionally pure-ish and separated from the UI:
 
 1. **Fetch** — pull story IDs from `topstories`, `beststories`, `newstories` concurrently (`Promise.allSettled`, so one dead feed can't kill the rest); details are fetched with **bounded concurrency** (`FETCH_CONCURRENCY: 12`) and a per-request timeout.
-2. **Normalize** — keep only valid, non-dead `story` items; attach domain + description.
+2. **Normalize** — keep only valid, non-dead `story` items; attach domain + description; sanitize untrusted content (`stripTags` strips HTML/control characters from title, text, author, and `isSafeUrl` only allows `http(s)://` — everything else falls back to the HN item link, so `javascript:`/`data:` never survive).
 3. **Dedupe** — by ID and by normalized title.
 4. **Topic-tag** — keyword patterns map titles to buckets like `ai`, `programming`, `security`, `crypto`, …
 5. **Score** — weighted blend of *popularity* (log-scaled), *freshness* (decays over a 72 h window), *discussion* (log-scaled comments), and a touch of *randomness*.
@@ -182,9 +185,22 @@ const SCORE_WEIGHTS = {
 
 ### 3. Saved posts (`getDailyHackerNews.js`)
 
-`toggleSavePost` / `getSavedPosts` / `isPostSaved` read/write `saved_hacker_news_posts` in `localStorage` behind a small `safeStorage` wrapper that swallows privacy-mode `localStorage` errors.
+`toggleSavePost` / `getSavedPosts` / `getSavedPostIdSet` read/write `saved_hacker_news_posts` in `localStorage` behind a small `safeStorage` wrapper that swallows privacy-mode `localStorage` errors. On render, the grid builds the ID set **once** and hands it to every card (`savedIds.has(id)`), instead of re-parsing `localStorage` per card.
 
-### 4. Feature behaviors
+### 4. Security hardening
+
+- **Content-Security-Policy** (`index.html`) — `default-src 'self'`; scripts are limited to `'self'`, Tailwind, the engine CDN, and two explicitly *hashed* inline snippets — **no `'unsafe-inline'`**, so injected `<script>` tags are blocked outright. `frame-src`/`object-src` are `'none'`, and `connect-src` is pinned to the HN API, the engine CDN, jsDelivr (icons), and the deployed origin.
+- **Output escaping** (`postCard.js`) — every HN-supplied value (title, description, timestamp, IDs, URLs) passes through `escapeHTML` before interpolation, so data can't break out of its text or attribute context even if the cache were tampered with.
+- **Input sanitizing** (`getDailyHackerNews.js`) — see normalize step above; the cached copy in `localStorage` is already clean.
+
+### 5. Performance notes
+
+- **One listener instead of ~200** (`Home.js`) — card clicks go through a single delegated listener on the persistent `#posts-container`, which survives every `innerHTML` swap.
+- **Batch-safe saved state** (`postGrid.js` + `postCard.js`) — `getSavedPostIdSet()` builds a `Set<string>` once per render; cards only do an O(1) `has()` check.
+- **Bounded entrance animations** (`Home.js`) — only the first 18 cards animate; below-the-fold cards render instantly.
+- **O(1) diverse selection** (`getDailyHackerNews.js`) — chosen stories are removed by swap-with-tail + `pop` instead of `splice`'s O(n) shift.
+
+### 6. Feature behaviors
 
 - **Download banner** (`DownloadBanner.js`) — rendered only when `!window.Android` (i.e. not already inside the app), **once per session** via a `sessionStorage` flag, then animated in with the spring easing. The CTA opens `APP_INFO.downloadUrl` when set, otherwise toasts "coming soon".
 - **Check for updates** (`About.js`) — fetches `version.json`, normalizes both versions numerically (`1.0` == `1.0.0`) and toasts the result; shows a spinner on the row while checking.

@@ -1,3 +1,18 @@
+// HTML-escapes untrusted text so it can't break out of its text/attribute
+// context regardless of how the template helper interpolates it.
+const escapeHTML = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[c],
+  );
+
 const PostCardSkeleton = () => html`
   <article
     class="w-full first:lg:col-span-2 last:lg:col-span-2 break-inside-avoid rounded-[24px] bg-[#1c1c1e] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
@@ -25,8 +40,8 @@ const PostCardSkeleton = () => html`
   </article>
 `;
 
-const PostCard = (post) => {
-  const saved = isPostSaved(post.id);
+const PostCard = (post, savedIds = new Set()) => {
+  const saved = savedIds.has(String(post.id));
 
   const score = Number(post.score ?? 0);
 
@@ -51,7 +66,9 @@ const PostCard = (post) => {
       class="shrink-0 break-inside-avoid rounded-[24px] bg-[#1c1c1e] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
     >
       <div class="flex items-center justify-between text-[11px] text-white/35">
-        ${timeAgo ? html`<span>${timeAgo}</span>` : html`<span></span>`}
+        ${timeAgo
+          ? html`<span>${escapeHTML(timeAgo)}</span>`
+          : html`<span></span>`}
 
         <span class="flex items-center gap-1">
           <span class="mdi mdi-arrow-up text-[13px] text-[#ff6600]"></span>
@@ -62,7 +79,7 @@ const PostCard = (post) => {
       <h2
         class="mt-2.5 line-clamp-3 text-[17px] font-semibold leading-[1.28] tracking-[-0.02em] text-white"
       >
-        ${post.title}
+        ${escapeHTML(post.title)}
       </h2>
 
       ${post.description
@@ -70,7 +87,7 @@ const PostCard = (post) => {
             <p
               class="mt-2 line-clamp-3 break-words text-[12px] leading-[1.45] text-white/40"
             >
-              ${post.description}
+              ${escapeHTML(post.description)}
             </p>
           `
         : ""}
@@ -80,7 +97,7 @@ const PostCard = (post) => {
         <button
           type="button"
           id="savePostBtn"
-          data-saveid="${post.id}"
+          data-saveid="${escapeHTML(post.id)}"
           class="ripple-container flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all active:scale-95 ${saved
             ? "bg-white text-black"
             : "bg-[#2c2c2e] text-white/65"}"
@@ -96,7 +113,7 @@ const PostCard = (post) => {
 
         <a
           id="postLink"
-          data-url="${post.url}"
+          data-url="${escapeHTML(post.url)}"
           class="ripple-container flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full bg-[#2c2c2e] text-[13px] font-semibold tracking-[-0.01em] text-white/90 transition-all active:scale-[0.98]"
         >
           Read Article

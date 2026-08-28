@@ -315,12 +315,42 @@ const fetchStories = async (ids) => {
 };
 
 /**
+ * Stops HTML-like content and control characters that a story payload may
+ * smuggle in. Defense in depth — templates also escape on render.
+ * @param {unknown} value
+ * @returns {string} plain text
+ */
+const stripTags = (value) =>
+  String(value ?? "")
+    .replace(/<\/?[a-zA-Z][^>]*>/g, "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .trim();
+
+/**
+ * Only http/https URLs may open from the app; anything else (javascript:,
+ * data:, vbscript:, …) is rejected.
+ * @param {unknown} url
+ * @returns {boolean}
+ */
+const isSafeUrl = (url) => {
+  try {
+    const parsed = new URL(String(url));
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Converts a raw HN item into the app's canonical post shape.
+ * Data is sanitized here (plain text + safe schemes) so the cached copy in
+ * localStorage is clean too.
  * @param {object} story - raw HN API item
  * @returns {object} normalized post
  */
 const normalizeStory = (story) => {
-  const url = story.url || `https://news.ycombinator.com/item?id=${story.id}`;
+  const fallbackUrl = `https://news.ycombinator.com/item?id=${story.id}`;
+  const url = isSafeUrl(story.url) ? String(story.url) : fallbackUrl;
 
   let domain = "news.ycombinator.com";
   try {
@@ -331,16 +361,12 @@ const normalizeStory = (story) => {
 
   return {
     id: String(story.id),
-    title: String(story.title).trim(),
+    title: stripTags(story.title).slice(0, 300),
     url,
-    description: story.text
-      ? String(story.text)
-          .replace(/<[^>]*>/g, "")
-          .slice(0, 500)
-      : "",
+    description: story.text ? stripTags(story.text).slice(0, 500) : "",
     image: null,
     source: "Hacker News",
-    author: story.by || null,
+    author: story.by ? stripTags(story.by).slice(0, 80) : null,
     score: Number(story.score) || 0,
     comments: Number(story.descendants) || 0,
     time: Number(story.time) || 0,
@@ -463,8 +489,13 @@ const selectDiverse = (scoredPosts, count) => {
     // Diversity caps blocked every candidate — fall back to the top remaining post.
     if (bestIndex === -1) bestIndex = 0;
 
-    selected.push(remaining.splice(bestIndex, 1)[0]);
-    const chosen = selected[selected.length - 1];
+    // O(1) removal: swap the chosen entry with the tail, then pop (avoids
+    // splice's O(n) left-shift on every pick).
+    const chosen = remaining[bestIndex];
+    remaining[bestIndex] = remaining[remaining.length - 1];
+    remaining.pop();
+
+    selected.push(chosen);
     domainCounts.set(
       chosen._domain,
       (domainCounts.get(chosen._domain) || 0) + 1,
@@ -540,11 +571,11 @@ const getDailyHackerNews = async (
 const getSavedPosts = () => safeStorage.get(HN_CONFIG.SAVED_POSTS_KEY) || [];
 
 /**
- * @param {string|number} postId
- * @returns {boolean} whether the given post is currently saved
+ * @returns {Set<string>} all saved post IDs, read once so bulk rendering
+ * doesn't re-parse the whole saved list per card.
  */
-const isPostSaved = (postId) =>
-  getSavedPosts().some((post) => String(post.id) === String(postId));
+const getSavedPostIdSet = () =>
+  new Set(getSavedPosts().map((post) => String(post.id)));
 
 /**
  * Adds or removes a post from the saved list.

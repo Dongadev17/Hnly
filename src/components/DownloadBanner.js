@@ -14,14 +14,14 @@ const getDownloadBanner = () => {
 const DownloadBanner = () => html`
   <div
     id="downloadBanner"
-    class="mx-3 mt-0.5 hidden"
+    class="mx-3 mt-0.5 hidden sticky top-16 z-50"
     role="complementary"
     aria-label="Download the ${APP_INFO.name} app"
   >
     <button
       type="button"
       data-download
-      class="ripple-container flex w-full items-center gap-3 rounded-[20px] border border-white/10 bg-white/5 p-2 pr-2 pl-2.5 text-left backdrop-blur-2xl transition-transform active:scale-[0.98]"
+      class="ripple-container flex w-full items-center gap-3 rounded-[20px] border border-white/10 bg-white/10 p-2 pr-2 pl-2.5 text-left backdrop-blur-md transition-transform active:scale-[0.98]"
     >
       <img
         src="assets/logo.png"
