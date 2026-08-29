@@ -106,7 +106,7 @@ const PostCard = (post, savedIds = new Set(), readIds = new Set()) => {
                   html`<li class="flex items-start gap-2 text-[12px] leading-relaxed text-white/65">
                     <span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#ff6600]"></span>
                     <span>${escapeHTML(reason)}</span>
-                  </li>`.replace(/\n\s*/g, " "), // keeps the mapped html compact
+                  </li>`.split("\n").map((l) => l.trim()).filter(Boolean).join(" "), // keeps the mapped html compact
                 ).join("")}
               </ul>
             </div>

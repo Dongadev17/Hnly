@@ -15,7 +15,8 @@ const hitToPost = (hit) => {
 
   let domain = "news.ycombinator.com";
   try {
-    domain = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    const host = new URL(url).hostname;
+    domain = (host.startsWith("www.") ? host.slice(4) : host).toLowerCase();
   } catch {}
 
   return {

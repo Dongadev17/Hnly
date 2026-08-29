@@ -19,7 +19,7 @@ const readSelectedPost = () => {
 // Comment body text is arbitrary HN-authored HTML — escape everything, then
 // treat newlines as line breaks. Nothing is ever injected as markup.
 const renderCommentText = (text) =>
-  escapeHTML(stripTags(text)).replace(/\n/g, "<br>");
+  escapeHTML(stripTags(text)).split("\n").join("<br>");
 
 const CommentSkeletonItem = () => html`
   <div class="space-y-2 px-4 py-4">
@@ -31,6 +31,7 @@ const CommentSkeletonItem = () => html`
 
 const commentNode = (comment, depth) => {
   const kids = Array.isArray(comment.kids) ? comment.kids : [];
+  const kidIds = kids.join(",");
 
   return html`
     <div data-comment-node class="break-inside-avoid">
@@ -53,7 +54,7 @@ const commentNode = (comment, depth) => {
               data-replies-toggle
               data-id="${escapeHTML(comment.id)}"
               data-depth="${depth}"
-              data-kids="${kids.join(",")}"
+              data-kids="${kidIds}"
               class="mt-1.5 inline-flex items-center gap-1 rounded-full py-1 pr-1 pl-0.5 text-[11px] font-medium text-white/40 transition-colors hover:text-[#ff6600]"
             >
               <span

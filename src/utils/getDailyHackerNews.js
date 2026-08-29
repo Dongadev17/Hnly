@@ -342,10 +342,14 @@ const fetchStories = async (ids, feedMap = new Map()) => {
  * @param {unknown} value
  * @returns {string} plain text
  */
+const HTML_TAG_RE = new RegExp("</?[a-zA-Z][^>]*>", "g");
+const CONTROL_KEEP = (code) => code === 9 || code === 10 || code === 13 || code >= 32;
 const stripTags = (value) =>
   String(value ?? "")
-    .replace(/<\/?[a-zA-Z][^>]*>/g, "")
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(HTML_TAG_RE, "")
+    .split("")
+    .filter((ch) => CONTROL_KEEP(ch.charCodeAt(0)))
+    .join("")
     .trim();
 
 /**
@@ -414,7 +418,8 @@ const normalizeStory = (story) => {
 
   let domain = "news.ycombinator.com";
   try {
-    domain = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    const host = new URL(url).hostname;
+    domain = (host.startsWith("www.") ? host.slice(4) : host).toLowerCase();
   } catch {
     // malformed URL — keep the HN fallback domain
   }
