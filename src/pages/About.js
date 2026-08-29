@@ -213,6 +213,61 @@ const About = (params, el) => {
           </div>
         </section>
 
+        <!-- Section: Legal -->
+        <h3
+          class="px-4 pb-1.5 pt-5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/35"
+        >
+          Legal
+        </h3>
+
+        <section
+          class="divide-y divide-white/10 overflow-hidden rounded-[18px] bg-[#1c1c1e] shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
+        >
+          <button
+            type="button"
+            data-route="privacy"
+            class="flex min-h-[48px] w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-white/5"
+          >
+            <span
+              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] bg-[#2c2c2e]"
+            >
+              <span
+                class="mdi mdi-shield-lock-outline text-[16px] text-white/60"
+              ></span>
+            </span>
+
+            <span class="flex-1 text-[15px] font-medium text-white">
+              Privacy Policy
+            </span>
+
+            <span
+              class="mdi mdi-chevron-right shrink-0 text-[18px] text-white/30"
+            ></span>
+          </button>
+
+          <button
+            type="button"
+            data-route="terms"
+            class="flex min-h-[48px] w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-white/5"
+          >
+            <span
+              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] bg-[#2c2c2e]"
+            >
+              <span
+                class="mdi mdi-file-document-outline text-[16px] text-white/60"
+              ></span>
+            </span>
+
+            <span class="flex-1 text-[15px] font-medium text-white">
+              Terms &amp; Conditions
+            </span>
+
+            <span
+              class="mdi mdi-chevron-right shrink-0 text-[18px] text-white/30"
+            ></span>
+          </button>
+        </section>
+
         <!-- Section: Donate -->
         <h3
           class="px-4 pb-1.5 pt-5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/35"

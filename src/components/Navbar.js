@@ -1,27 +1,35 @@
 const HomeNav = html`
   <h1 class="text-[24px] font-bold tracking-[-0.03em] text-white">Hnly</h1>
   <div class="flex items-center gap-2">
-    <button id="refreshBtn">
-      <span
-        id="refreshIcon"
-        class="ripple-container text-2xl mdi mdi-refresh bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
-      ></span>
-    </button>
-    <button data-route="search">
-      <span
-        class="ripple-container text-2xl mdi mdi-magnify bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
-      ></span>
-    </button>
-    <button data-route="posts">
-      <span
-        class="ripple-container text-2xl mdi mdi-archive bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
-      ></span>
-    </button>
-    <button data-route="about">
-      <span
-        class="ripple-container text-2xl mdi mdi-information-outline bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
-      ></span>
-    </button>
+    <div
+      class="bg-[#212121] flex items-center gap-1 border-y border-[#333333] rounded-full"
+    >
+      <button id="refreshBtn">
+        <span
+          id="refreshIcon"
+          class="active:rounded-2xl ripple-container text-2xl mdi mdi-refresh bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
+        ></span>
+      </button>
+      <button data-route="search">
+        <span
+          class="active:rounded-2xl ripple-container text-2xl mdi mdi-magnify bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
+        ></span>
+      </button>
+    </div>
+    <div
+      class="bg-[#212121] flex items-center gap-1 border-y border-[#333333] rounded-full"
+    >
+      <button data-route="posts">
+        <span
+          class="active:rounded-2xl ripple-container text-2xl mdi mdi-archive bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
+        ></span>
+      </button>
+      <button data-route="about">
+        <span
+          class="active:rounded-2xl ripple-container text-2xl mdi mdi-information-outline bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
+        ></span>
+      </button>
+    </div>
   </div>
 `;
 
@@ -43,9 +51,7 @@ const CommentsNav = html`
       class="ripple-container text-2xl mdi mdi-keyboard-backspace bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
     ></span>
   </button>
-  <h1 class="text-[24px] font-bold tracking-[-0.03em] text-white">
-    Comments
-  </h1>
+  <h1 class="text-[24px] font-bold tracking-[-0.03em] text-white">Comments</h1>
   <div class="w-10"></div>
 `;
 
@@ -66,6 +72,30 @@ const AboutNav = html`
     ></span>
   </button>
   <h1 class="text-[24px] font-bold tracking-[-0.03em] text-white">About</h1>
+  <div class="w-10"></div>
+`;
+
+const PolicyNav = html`
+  <button data-route="about">
+    <span
+      class="ripple-container text-2xl mdi mdi-keyboard-backspace bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
+    ></span>
+  </button>
+  <h1 class="text-[24px] font-bold tracking-[-0.03em] text-white">
+    Privacy Policy
+  </h1>
+  <div class="w-10"></div>
+`;
+
+const TermsNav = html`
+  <button data-route="about">
+    <span
+      class="ripple-container text-2xl mdi mdi-keyboard-backspace bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
+    ></span>
+  </button>
+  <h1 class="text-[24px] font-bold tracking-[-0.03em] text-white">
+    Terms &amp; Conditions
+  </h1>
   <div class="w-10"></div>
 `;
 

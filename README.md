@@ -32,7 +32,7 @@ src/main.js  ────── creates the Router, defines routes, global state
         │
         ├── Router + UI primitives (html, Toast, utils, …)  ◄── provided by the runtime engine
         │
-        ├── pages   Home · Comments · Search · Posts · About   (route entry points)
+        ├── pages   Home · Comments · Search · Posts · About · Privacy · Terms   (route entry points)
         │              │
         │              ├── components  Navbar · DownloadBanner · postCard · postGrid
         │              └── utils       getDailyHackerNews (feed pipeline + saved posts)
@@ -74,7 +74,9 @@ Everything below describes **Hnly's own code**.
 │   │   ├── Comments.js            # In-app HN thread: story header + lazily-expanding replies
 │   │   ├── Search.js              # Live Algolia story search (debounced, load-more)
 │   │   ├── Posts.js               # Saved posts + animated removal + toolbar actions
-│   │   └── About.js               # iOS-style settings page + actions
+│   │   ├── About.js               # iOS-style settings page + actions
+│   │   ├── Privacy.js             # Privacy Policy (legal card list, reachable from About)
+│   │   └── Terms.js               # Terms & Conditions (shares the legal card list)
 │   └── utils/
 │       └── getDailyHackerNews.js  # Fetch → dedupe → tag → score → diversify → cache
 └── commitpush.bat                 # Local dev helper (gitignored)
@@ -102,6 +104,8 @@ r.add("home", Home, { cache: false })
   .add("comments", Comments, { cache: false })
   .add("search", Search, { cache: false })
   .add("about", About, { cache: false })
+  .add("privacy", Privacy, { cache: false })
+  .add("terms", Terms, { cache: false })
 ```
 
 - Each page is a **function** `(params, el) => …` that returns a template string and receives the mounted element.
