@@ -43,11 +43,76 @@ const checkForUpdates = async (button) => {
 
     if (compareVersions(latest, APP_INFO.version) > 0) {
       Toast.show(`New version available: v${latest}`);
+      const updateSheet = new BottomSheet({
+        content: html`
+          <div class="pb-4 pt-2 text-center">
+            <img
+              src="assets/logo.png"
+              alt="${APP_INFO.name}"
+              class="mx-auto h-[76px] w-[76px] rounded-[22px] shadow-[0_10px_28px_rgba(0,0,0,0.5)]"
+            />
+
+            <div
+              class="mt-3.5 inline-flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-[11px] font-semibold text-white/50"
+            >
+              <span
+                class="mdi mdi-shield-check-outline text-[12px] text-[#ff6600]"
+              ></span>
+              v${latest}
+            </div>
+
+            <h2
+              class="mt-3 text-[22px] font-bold uppercase tracking-[-0.02em] text-white"
+            >
+              Update available
+            </h2>
+
+            <p
+              class="mx-auto mt-1.5 max-w-[300px] text-[14px] leading-relaxed text-white/55"
+            >
+              A fresh version of ${APP_INFO.name} is ready. Smoother, faster,
+              and better than ever.
+            </p>
+
+            <div class="mt-6 grid gap-2.5">
+              <button
+                id="updateBtn"
+                class="ripple-container flex h-[50px] items-center justify-center gap-2 rounded-full bg-[#ff6600] text-[16px] font-semibold text-white shadow-[0_8px_22px_rgba(255,102,0,0.35)] transition-all active:scale-[0.97]"
+              >
+                <span class="mdi mdi-download text-[18px]"></span>
+                Update now
+              </button>
+              <button
+                id="laterBtn"
+                class="ripple-container flex h-[50px] items-center justify-center rounded-full bg-[#2c2c2e] text-[16px] font-semibold text-white/90 transition-all active:scale-[0.97]"
+              >
+                Later
+              </button>
+            </div>
+          </div>
+        `,
+      });
+
       setTimeout(() => {
-        if (window.Android) {
-          openExternalLink(APP_INFO.downloadUrl);
-        }
-      }, 800);
+        updateSheet.show().then((sh) => {
+          const updateBtn = sh.querySelector("#updateBtn");
+          const laterBtn = sh.querySelector("#laterBtn");
+
+          laterBtn.addEventListener("click", () => {
+            updateSheet.dismiss();
+          });
+
+          updateBtn.addEventListener("click", () => {
+            updateSheet.dismiss().then(() => {
+              setTimeout(() => {
+                if (window.Android) {
+                  openExternalLink(APP_INFO.downloadUrl);
+                }
+              }, 250);
+            });
+          });
+        });
+      }, 1500);
     } else {
       Toast.show("You're on the latest version");
     }
@@ -107,7 +172,7 @@ const About = (params, el) => {
       <!-- Navbar -->
       ${Navbar(AboutNav)}
 
-      <main class="px-3 pb-10 pt-8">
+      <main class="px-3 pb-10 pt-5">
         <!-- Section: App -->
         <h3
           class="px-4 pb-1.5 pt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/35"

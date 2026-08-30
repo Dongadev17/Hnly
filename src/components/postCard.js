@@ -172,7 +172,7 @@ const PostCard = (
           >
             <span class="mdi mdi-comment-outline text-[17px]"></span>
             ${commentCount > 0
-              ? html`<span class="text-sm pb-1 pl-1 font-medium"
+              ? html`<span class="text-xs pb-1 pl-1.5 font-medium"
                   >${commentCount > 99 ? "99+" : commentCount}</span
                 >`
               : ""}

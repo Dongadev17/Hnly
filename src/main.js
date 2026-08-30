@@ -1,6 +1,6 @@
 const APP_INFO = {
   name: "Hnly",
-  version: window?.Android ? Android.getAppVersion() : "1.0.0", //Android.version : "1.0.0",
+  version: window?.Android ? Android.getAppVersion() : "1.0.2", //Android.version : "1.0.0",
   tagline: "Your daily dose of tech stories",
   // Replace with your real Solana wallet address
   solanaWallet: "8nosMJPbhitDwzCirUDMeePLJy4jYTibT3A2wxAZhHXX",

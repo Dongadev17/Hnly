@@ -635,7 +635,7 @@ const getDailyHackerNews = async (
     if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
       const age = Date.now() - cached.timestamp;
       if (age < HN_CONFIG.CACHE_TTL_MS) {
-        Toast.show("Using cached posts");
+        // Toast.show("Using cached posts");
         return cached.posts.slice(0, count);
       }
       safeStorage.remove(HN_CONFIG.CACHE_KEY);
