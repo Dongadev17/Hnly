@@ -25,7 +25,12 @@ const PostCardSkeleton = () => html`
   </article>
 `;
 
-const PostCard = (post, savedIds = new Set(), readIds = new Set()) => {
+const PostCard = (
+  post,
+  savedIds = new Set(),
+  readIds = new Set(),
+  hideInfo = false,
+) => {
   const id = String(post.id);
   const saved = savedIds.has(id);
   const read = readIds.has(id);
@@ -40,15 +45,17 @@ const PostCard = (post, savedIds = new Set(), readIds = new Set()) => {
       class="shrink-0 break-inside-avoid rounded-[24px] bg-[#1c1c1e] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
     >
       <div class="flex items-center justify-between text-[11px] text-white/35">
-        <span class="flex min-w-0 items-center gap-1.5">
+        <div class="flex min-w-0 items-center gap-1.5 font-medium">
           ${age ? html`<span>${escapeHTML(age)}</span>` : html`<span></span>`}
           ${read
-            ? html`<span
-                class="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-medium text-white/45"
-                >Read</span
-              >`
+            ? html`<div
+                class="flex items-center gap-0.5 bg-white/5 rounded-full shadow-md py-0.5 leading-tight px-2"
+              >
+                <span class="mdi mdi-check text-[12px]"></span>
+                <p class="text-[9.5px]">Read</p>
+              </div>`
             : ""}
-        </span>
+        </div>
 
         <span class="flex shrink-0 items-center gap-2.5">
           <span class="flex items-center gap-1">
@@ -56,7 +63,7 @@ const PostCard = (post, savedIds = new Set(), readIds = new Set()) => {
             <span class="font-semibold text-white/55">${score}</span>
           </span>
 
-          ${why.length
+          ${!hideInfo && why.length
             ? html`<button
                 type="button"
                 data-why
@@ -90,24 +97,36 @@ const PostCard = (post, savedIds = new Set(), readIds = new Set()) => {
             </p>
           `
         : ""}
-
       ${why.length
         ? html`
             <div
               data-why-panel
               class="mt-3 hidden rounded-[14px] border border-white/10 bg-[#2c2c2e]/60 p-3"
             >
-              <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#ff6600]">
+              <div
+                class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#ff6600]"
+              >
                 <span class="mdi mdi-lightbulb-on-outline text-[13px]"></span>
                 Why this story?
               </div>
               <ul class="mt-2 space-y-1.5">
-                ${why.map((reason) =>
-                  html`<li class="flex items-start gap-2 text-[12px] leading-relaxed text-white/65">
-                    <span class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#ff6600]"></span>
-                    <span>${escapeHTML(reason)}</span>
-                  </li>`.split("\n").map((l) => l.trim()).filter(Boolean).join(" "), // keeps the mapped html compact
-                ).join("")}
+                ${why
+                  .map(
+                    (reason) =>
+                      html`<li
+                        class="flex items-start gap-2 text-[12px] leading-relaxed text-white/65"
+                      >
+                        <span
+                          class="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#ff6600]"
+                        ></span>
+                        <span>${escapeHTML(reason)}</span>
+                      </li>`
+                        .split("\n")
+                        .map((l) => l.trim())
+                        .filter(Boolean)
+                        .join(" "), // keeps the mapped html compact
+                  )
+                  .join("")}
               </ul>
             </div>
           `
@@ -131,7 +150,7 @@ const PostCard = (post, savedIds = new Set(), readIds = new Set()) => {
           <button
             type="button"
             data-saveid="${escapeHTML(id)}"
-            class="ripple-container flex h-10 items-center justify-center rounded-full transition-all active:scale-95 ${saved
+            class="ripple-container flex h-10 items-center justify-center rounded-full transition-all ${saved
               ? "bg-white text-black"
               : "bg-[#2c2c2e] text-white/65"}"
             aria-label="${saved ? "Remove from saved" : "Save for later"}"
@@ -147,14 +166,13 @@ const PostCard = (post, savedIds = new Set(), readIds = new Set()) => {
           <button
             type="button"
             data-comments="${escapeHTML(id)}"
-            class="ripple-container relative flex h-10 items-center justify-center rounded-full bg-[#2c2c2e] text-white/65 transition-all active:scale-95"
+            class="ripple-container flex h-10 items-center justify-center rounded-full bg-[#2c2c2e] text-white/65 transition-all"
             aria-label="Open comments"
             title="Open comments"
           >
             <span class="mdi mdi-comment-outline text-[17px]"></span>
             ${commentCount > 0
-              ? html`<span
-                  class="absolute right-1 top-1 min-w-[16px] rounded-full bg-[#ff6600] px-1 text-center text-[8px] font-bold leading-[16px] text-white"
+              ? html`<span class="text-sm pb-1 pl-1 font-medium"
                   >${commentCount > 99 ? "99+" : commentCount}</span
                 >`
               : ""}
@@ -163,17 +181,17 @@ const PostCard = (post, savedIds = new Set(), readIds = new Set()) => {
           <button
             type="button"
             data-share="${escapeHTML(id)}"
-            class="ripple-container flex h-10 items-center justify-center rounded-full bg-[#2c2c2e] text-white/65 transition-all active:scale-95"
+            class="ripple-container flex h-10 items-center justify-center rounded-full bg-[#2c2c2e] text-white/65 transition-all"
             aria-label="Share post"
             title="Share post"
           >
-            <span class="mdi mdi-share-variant text-[17px]"></span>
+            <span class="mdi mdi-share-all text-[17px]"></span>
           </button>
 
           <button
             type="button"
             data-hide="${escapeHTML(id)}"
-            class="ripple-container flex h-10 items-center justify-center rounded-full bg-[#2c2c2e] text-white/65 transition-all active:scale-95"
+            class="ripple-container flex h-10 items-center justify-center rounded-full bg-[#2c2c2e] text-white/65 transition-all"
             aria-label="Hide post"
             title="Hide post"
           >

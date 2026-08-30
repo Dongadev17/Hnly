@@ -263,6 +263,12 @@ const Search = (params, el) => {
         );
         if (post) {
           const text = `${post.title}\n${post.url}`;
+          if (window.Android && Android.shareText) {
+            try {
+              Android.shareText(text);
+            } catch {}
+            return;
+          }
           if (navigator.share) {
             try {
               await navigator.share({ title: post.title, text, url: post.url });

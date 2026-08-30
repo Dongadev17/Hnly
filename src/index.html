@@ -16,11 +16,11 @@
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self';
-        script-src 'self' 'unsafe-eval' https://cdn.tailwindcss.com https://zap.fihelay497.workers.dev https://scripts.simpleanalyticscdn.com 'sha256-iX1pRJZQ3XfyQ8XuGiv2bAefDldlgSxeBp3XWKfxHGA=';
+        script-src 'self' 'unsafe-eval' https://cdn.tailwindcss.com https://zap.fihelay497.workers.dev https://scripts.simpleanalyticscdn.com https://cloud.umami.is 'sha256-iX1pRJZQ3XfyQ8XuGiv2bAefDldlgSxeBp3XWKfxHGA=';
         style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://zap.fihelay497.workers.dev https://fonts.googleapis.com https://cdn.jsdelivr.net;
         font-src https://fonts.gstatic.com https://cdn.jsdelivr.net data:;
         img-src 'self' data: https://queue.simpleanalyticscdn.com;
-        connect-src 'self' https://zap.fihelay497.workers.dev https://hacker-news.firebaseio.com https://hnly.netlify.app https://cdn.jsdelivr.net https://hn.algolia.com https://queue.simpleanalyticscdn.com https://scripts.simpleanalyticscdn.com;
+        connect-src 'self' https://zap.fihelay497.workers.dev https://hacker-news.firebaseio.com https://hnly.netlify.app https://cdn.jsdelivr.net https://hn.algolia.com https://queue.simpleanalyticscdn.com https://scripts.simpleanalyticscdn.com https://cloud.umami.is;
         frame-src 'none';
         object-src 'none';
         base-uri 'self';
@@ -32,26 +32,38 @@
     <link rel="apple-touch-icon" href="assets/logo.png" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Hnly" />
-    <meta property="og:title" content="Hnly — privacy-first Hacker News client" />
+    <meta
+      property="og:title"
+      content="Hnly — privacy-first Hacker News client"
+    />
     <meta
       property="og:description"
       content="A fast, privacy-first client for Hacker News. No accounts, no tracking."
     />
     <meta property="og:url" content="https://hnly.netlify.app/" />
-    <meta property="og:image" content="https://hnly.netlify.app/assets/logo.png" />
+    <meta
+      property="og:image"
+      content="https://hnly.netlify.app/assets/logo.png"
+    />
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Hnly — privacy-first Hacker News client" />
+    <meta
+      name="twitter:title"
+      content="Hnly — privacy-first Hacker News client"
+    />
     <meta
       name="twitter:description"
       content="A fast, privacy-first client for Hacker News. No accounts, no tracking."
     />
-    <meta name="twitter:image" content="https://hnly.netlify.app/assets/logo.png" />
+    <meta
+      name="twitter:image"
+      content="https://hnly.netlify.app/assets/logo.png"
+    />
     <script defer src="https://cdn.tailwindcss.com/3.4.17"></script>
     <link rel="preconnect" href="https://scripts.simpleanalyticscdn.com" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
       rel="stylesheet"
     />
     <link
@@ -60,7 +72,6 @@
     />
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="https://zap.fihelay497.workers.dev/css" />
-    <!-- 100% privacy-first analytics -->
     <script
       data-collect-dnt="true"
       async
@@ -72,6 +83,11 @@
         alt=""
         referrerpolicy="no-referrer-when-downgrade"
     /></noscript>
+    <script
+      defer
+      src="https://cloud.umami.is/script.js"
+      data-website-id="44f0574d-0f26-447a-81c7-0ba95bbdfaf9"
+    ></script>
   </head>
   <body class="relative overflow-hidden">
     <div id="app"></div>

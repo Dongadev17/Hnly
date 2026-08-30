@@ -16,16 +16,16 @@ const TOPIC_LABELS = {
 const TOPIC_ORDER = () => ["all", ...getTopics()];
 
 const renderTopicChips = (active) => html`
-  <div class="scrollbar-hide flex gap-1.5 overflow-x-auto pb-2">
+  <div data-topic-scroll class="scrollbar-hide flex gap-1.5 overflow-x-auto pb-2">
     ${TOPIC_ORDER().map(
       (key) => html`
         <button
           type="button"
           data-topic="${key}"
-          class="shrink-0 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors active:scale-95 ${key ===
+          class="shrink-0 rounded-full px-3 py-1.5 text-[12px] transition-colors active:scale-95 ${key ===
           active
-            ? "bg-white text-black"
-            : "bg-[#2c2c2e] text-white/60"}"
+            ? "bg-white text-black font-bold opacity-100"
+            : "bg-[#2c2c2e] text-white/60 opacity-60 font-medium"}"
         >
           ${TOPIC_LABELS[key] ?? key}
         </button>
@@ -44,12 +44,12 @@ const Home = (params, el) => {
       ${getDownloadBanner()}
 
       <!-- Content -->
-      <main class="px-3 pb-8 pt-2">
+      <main class="px-3 pb-8 pt-4">
         <!-- Topic / feed chips -->
         <div id="filterBar">${renderTopicChips("all")}</div>
         <div id="hiddenBar"></div>
 
-        <div id="posts-container">${PostGrid()}</div>
+        <div id="posts-container" class="pt-1.5">${PostGrid()}</div>
       </main>
       <br />
     </div>
@@ -66,7 +66,14 @@ const Home = (params, el) => {
     let showingHidden = false;
 
     const shareStory = async (post) => {
-    const text = `${post.title}\n${post.url}`;
+    const text = `${post.title}\n\n${post.url}`;
+
+    if (window.Android && Android.shareText) {
+      try {
+        Android.shareText(text);
+      } catch {}
+      return;
+    }
 
     if (navigator.share) {
       try {
@@ -75,11 +82,6 @@ const Home = (params, el) => {
       } catch {
         // user cancelled or unsupported — fall through
       }
-    }
-
-    if (window.Android && Android.shareText) {
-      Android.shareText(post.title, text);
-      return;
     }
 
     try {
@@ -164,6 +166,25 @@ const Home = (params, el) => {
       filterBar.innerHTML = renderTopicChips(activeTopic);
       hiddenBar.innerHTML = renderHiddenBar(hid.size);
       animateCardsIn();
+      centerActiveChip();
+    };
+
+    // Keeps the selected topic chip centered in the horizontal chip bar
+    // after any re-render, so a far-right topic never lands out of view.
+    const centerActiveChip = () => {
+      const scroller = filterBar.querySelector("[data-topic-scroll]");
+      const active = scroller?.querySelector(`[data-topic="${activeTopic}"]`);
+      if (!scroller || !active) return;
+      const offset =
+        active.getBoundingClientRect().left -
+        scroller.getBoundingClientRect().left;
+      scroller.scrollTo({
+        left: Math.max(
+          0,
+          offset - (scroller.clientWidth - active.offsetWidth) / 2,
+        ),
+        behavior: "smooth",
+      });
     };
 
     // Staggered entrance for post cards (home page only). Only the first

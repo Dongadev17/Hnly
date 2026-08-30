@@ -352,14 +352,46 @@ const stripTags = (value) =>
     .join("")
     .trim();
 
+// HN/API text ships HTML-entity-encoded (&amp;, &#x27;, &#x2F;, &#x27;, …).
+// escapeHTML decodes these exactly once before escaping, so double-encoded
+// values render cleanly instead of showing &amp;#x2F;. Decode-then-escape
+// also makes escapeHTML idempotent: escapeHTML(escapeHTML(x)) === escapeHTML(x),
+// so stale cached/saved copies self-heal on the next render.
+const NAMED_ENTITY_MAP = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+const decodeEntities = (value) =>
+  String(value ?? "").replace(
+    /&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|([a-zA-Z][a-zA-Z0-9]*));/g,
+    (match, dec, hex, named) => {
+      if (named) return NAMED_ENTITY_MAP[named] ?? match;
+      const code = dec ? parseInt(dec, 10) : parseInt(hex, 16);
+      if (
+        Number.isFinite(code) &&
+        code >= 0 &&
+        code <= 0x10ffff &&
+        (code < 0xd800 || code > 0xdfff)
+      ) {
+        return String.fromCodePoint(code);
+      }
+      return match;
+    },
+  );
+
 /**
  * HTML-escapes untrusted text so it can't break out of its text/attribute
- * context regardless of how the template helper interpolates it.
+ * context regardless of how the template helper interpolates it. Decodes
+ * HN/API HTML entities first, then escapes — safe to apply repeatedly.
  * @param {unknown} value
  * @returns {string}
  */
 const escapeHTML = (value) =>
-  String(value ?? "").replace(
+  decodeEntities(value).replace(
     /[&<>"']/g,
     (c) =>
       ({

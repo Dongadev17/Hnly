@@ -1,32 +1,32 @@
 const HomeNav = html`
-  <h1 class="text-[24px] font-bold tracking-[-0.03em] text-white">Hnly</h1>
+  <h1 class="text-[28px] font-bold tracking-[-0.03em] text-white">Hnly</h1>
   <div class="flex items-center gap-2">
     <div
-      class="bg-[#212121] flex items-center gap-1 border-y border-[#333333] rounded-full"
+      class="bg-[#212121] flex items-center border-y border-[#333333] rounded-full"
     >
       <button id="refreshBtn">
         <span
           id="refreshIcon"
-          class="active:rounded-2xl ripple-container text-2xl mdi mdi-refresh bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
+          class="ripple-container text-2xl mdi mdi-refresh bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-l-full"
         ></span>
       </button>
       <button data-route="search">
         <span
-          class="active:rounded-2xl ripple-container text-2xl mdi mdi-magnify bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
+          class="ripple-container text-2xl mdi mdi-magnify bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-r-full"
         ></span>
       </button>
     </div>
     <div
-      class="bg-[#212121] flex items-center gap-1 border-y border-[#333333] rounded-full"
+      class="bg-[#212121] flex items-center border-y border-[#333333] rounded-full"
     >
       <button data-route="posts">
         <span
-          class="active:rounded-2xl ripple-container text-2xl mdi mdi-archive bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
+          class="ripple-container text-2xl mdi mdi-archive bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-l-full"
         ></span>
       </button>
       <button data-route="about">
         <span
-          class="active:rounded-2xl ripple-container text-2xl mdi mdi-information-outline bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-full"
+          class="ripple-container text-2xl mdi mdi-information-outline bg-[#212121] border-y border-[#333333] pt-2 pb-1.5 px-3 rounded-r-full"
         ></span>
       </button>
     </div>
