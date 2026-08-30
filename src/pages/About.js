@@ -43,6 +43,11 @@ const checkForUpdates = async (button) => {
 
     if (compareVersions(latest, APP_INFO.version) > 0) {
       Toast.show(`New version available: v${latest}`);
+      setTimeout(() => {
+        if (window.Android) {
+          openExternalLink(APP_INFO.downloadUrl);
+        }
+      }, 800);
     } else {
       Toast.show("You're on the latest version");
     }
@@ -298,7 +303,7 @@ const About = (params, el) => {
             </p>
           </div>
         </section>
-      </main> 
+      </main>
     </div>
   `;
 };
