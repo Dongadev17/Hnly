@@ -1,11 +1,11 @@
 const APP_INFO = {
   name: "Hnly",
-  version: window?.Android ? Android.getAppVersion() : "1.0.2", //Android.version : "1.0.0",
+  version: window?.Android ? Android.getAppVersion() : "1.0.4", //Android.version : "1.0.0",
   tagline: "Your daily dose of tech stories",
   // Replace with your real Solana wallet address
   solanaWallet: "8nosMJPbhitDwzCirUDMeePLJy4jYTibT3A2wxAZhHXX",
   // TODO: Replace with the real APK / GitHub release download URL
-  downloadUrl: "https://hnly.netlify.app/hnly.apk",
+  downloadUrl: "https://github.com/Dongadev17/Hnly/releases/download/v1.0.4/Hnly.apk",
   // TODO: Replace with the real GitHub Issues URL (or another feedback link)
   feedbackUrl: "https://github.com/Dongadev17/Hnly/issues/1",
 };
@@ -27,4 +27,4 @@ r.add("home", Home, { cache: false })
   .add("about", About, { cache: false })
   .add("privacy", Privacy, { cache: false })
   .add("terms", Terms, { cache: false })
-  .start("home") 
+  .start("home");

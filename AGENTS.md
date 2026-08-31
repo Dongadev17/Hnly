@@ -19,8 +19,9 @@ The gitignored `corex.yaml` config drives the wrapper build (bundle + minify). B
 - **Method calls inside `${}` template interpolation** — precompute first: `const kidIds = kids.join(",");` then use `${kidIds}`.
 
 ## Storage keys (duplicate names = divergence)
-- Cache: `daily_hacker_news_v2` (5 min TTL) — **bump the version suffix when post shape gains fields** (`_topic`, `_feeds`, `_rank`, `_why` were v2).
-- `saved_hacker_news_posts`, `hnly_read_posts`, `hnly_hidden_posts` (localStorage, via `safeStorage`); `hnly_selected_post` (sessionStorage, mirrors the Comments route's story).
+- Cache: `daily_hacker_news_v3` (5 min TTL) — **bump the version suffix when the post set changes**. v2 added `_topic`/`_feeds`/`_rank`/`_why`; v3 changed selection to reserve up to `MIN_PER_TOPIC` posts per topic and grew the pool (`MAX_CANDIDATES: 320`).
+- `algeria_news_v3` (Algeria Tech feed cache, 5 min TTL) — v3 switched from the RSS feed to the WP REST API filtered by the Algeria tag (id 119).
+- `saved_hacker_news_posts`, `hnly_read_posts`, `hnly_hidden_posts` (localStorage, via `safeStorage`); `hnly_selected_post` (sessionStorage, mirrors the Comments route's story); `hnly_algeria_notice` (localStorage, once-ever Algeria-first visit notice).
 
 ## Platform & deploy
 - `window.Android` bridge (`getAppVersion`, `openInAppBrowser`, `copyText`) is checked as a property and must degrade gracefully on web.

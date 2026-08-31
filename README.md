@@ -10,7 +10,8 @@ A curated daily Hacker News feed — ranked every day by popularity, freshness, 
 
 - **One UI, two hosts** — the exact same `src/` runs in a browser and inside the native Android WebView. A tiny JS bridge (`window.Android`) upgrades the experience when running packaged.
 - **Zero-dependency web stack** — plain ES2022+ JavaScript, [Tailwind CSS (CDN)](https://tailwindcss.com/), Material Design Icons, and the Montserrat font.
-- **Smart daily feed** — merges HN `topstories`, `beststories`, and `newstories`, deduplicates, infers topics, scores each story, and greedily selects a diverse set (no domain/topic monopolies).
+- **Smart daily feed** — merges HN `topstories`, `beststories`, and `newstories`, deduplicates, infers topics, scores each story, and selects a diverse set (no domain/topic monopolies) while reserving up to `MIN_PER_TOPIC` (20) stories for every topic so no topic tab is left nearly empty.
+- **Algeria Tech tab** — a dedicated feed of **Algeria-only** stories pulled from the `algeriatech.news` WordPress REST API filtered by the Algeria tag (id 119), rendered with HN-only UI (scores, comments) hidden.
 - **"Why this story?"** — every card explains its selection: rank, engagement, age, and diversity reasons are surfaced inline.
 - **Topic tabs** — filter the feed by bucket (`AI`, `Security`, `Web`, …) with one-tap chips above the list.
 - **Read · hide · save · share** — each card carries a toolbar: save for later, open the in-app comments, use the native share sheet (or clipboard fallback), or hide a story.
@@ -190,8 +191,10 @@ This file is intentionally pure-ish and separated from the UI:
 3. **Dedupe** — by ID and by normalized title.
 4. **Topic-tag** — keyword patterns map titles to buckets like `ai`, `programming`, `security`, `crypto`, … (stored as `_topic`).
 5. **Score** — weighted blend of *popularity* (log-scaled), *freshness* (decays over a 72 h window), *discussion* (log-scaled comments), and a touch of *randomness*. Stories are then ranked (`_rank`).
-6. **Diversify** — greedy selection that penalizes a second story from the same domain or topic. Each pick records *why* it won (`_why`: rank, engagement, age, diversity) — that's the "Why this story?" panel on the card.
-7. **Cache** — the result is cached in `localStorage` with a 5-minute TTL to spare the HN API (and your data). The cache key was bumped to `daily_hacker_news_v2` when `_topic`/`_feeds`/`_rank`/`_why` were introduced, so stale pre-feature entries are ignored.
+6. **Select (floor + diversify)** — two phases. A **floor pass** first reserves up to `MIN_PER_TOPIC` (20) of the best-scored stories for **every** topic, so a topic tab is never left nearly empty (best-effort: a topic with fewer matching stories that day just yields what it has, and the pool was raised to `MAX_CANDIDATES: 320` to make 20×11 reachable). A **top-up pass** then fills the rest with greedy domain/topic diversity that penalizes a second story from the same domain or topic. Each pick records *why* it won (`_why`: rank, engagement, age, diversity) — that's the "Why this story?" panel on the card.
+7. **Cache** — the full selected set is cached in `localStorage` with a 5-minute TTL to spare the HN API (and your data). The cache key was bumped to `daily_hacker_news_v3` when per-topic flooring was introduced, so stale pre-feature entries are ignored.
+
+**A separate Algeria feed** (`algeriaTech`) lives in the same file but is a different pipeline: `getAlgeriaTechPosts()` calls the `algeriatech.news` WordPress REST API filtered by the dedicated **Algeria** tag (id 119) so only stories genuinely about Algeria come back — the generic RSS feed was dropped because every article embedded a "Relevance for Algeria" block that caused false-positive keyword matches. Posts are tagged `_topic: "algeriaTech"`, marked `_source: "algeriatech"`, cached under `algeria_news_v3` (5 min TTL), and rendered with HN-only UI (scores, comments) hidden.
 
 ```js
 const SCORE_WEIGHTS = {

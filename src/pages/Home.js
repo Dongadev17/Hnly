@@ -1,6 +1,7 @@
 const TOPIC_LABELS = {
   all: "All",
   other: "Other",
+  algeriaTech: "Algeria Tech",
   ai: "AI",
   programming: "Programming",
   security: "Security",
@@ -13,28 +14,38 @@ const TOPIC_LABELS = {
   crypto: "Crypto",
   society: "Society",
 };
-const TOPIC_ORDER = () => ["all", ...getTopics()];
+const TOPIC_ORDER = () => [
+  "all",
+  "algeriaTech",
+  ...getTopics().filter((key) => key !== "algeriaTech"),
+];
 
 const renderTopicChips = (active) => html`
-  <div data-topic-scroll class="scrollbar-hide flex gap-1.5 overflow-x-auto pb-2">
-    ${TOPIC_ORDER().map(
-      (key) => html`
-        <button
-          type="button"
-          data-topic="${key}"
-          class="shrink-0 rounded-full px-3 py-1.5 text-[12px] transition-colors active:scale-95 ${key ===
-          active
-            ? "bg-white text-black font-bold opacity-100"
-            : "bg-[#2c2c2e] text-white/60 opacity-60 font-medium"}"
-        >
-          ${TOPIC_LABELS[key] ?? key}
-        </button>
-      `,
-    ).join("")}
+  <div
+    data-topic-scroll
+    class="scrollbar-hide flex gap-1.5 overflow-x-auto pb-2"
+  >
+    ${TOPIC_ORDER()
+      .map(
+        (key) => html`
+          <button
+            type="button"
+            data-topic="${key}"
+            class="shrink-0 rounded-full px-3 py-1.5 text-[12px] transition-colors active:scale-95 ${key ===
+            active
+              ? "bg-white text-black font-bold opacity-100"
+              : "bg-[#2c2c2e] text-white/60 opacity-60 font-medium"}"
+          >
+            ${TOPIC_LABELS[key] ?? key}
+          </button>
+        `,
+      )
+      .join("")}
   </div>
 `;
 
 const Home = (params, el) => {
+  const topicSearch = params.topic;
   const Page = html`
     <div class="min-h-screen">
       <!-- Navbar -->
@@ -46,7 +57,7 @@ const Home = (params, el) => {
       <!-- Content -->
       <main class="px-3 pb-8 pt-4">
         <!-- Topic / feed chips -->
-        <div id="filterBar">${renderTopicChips("all")}</div>
+        <div id="filterBar">${renderTopicChips(topicSearch || "all")}</div>
         <div id="hiddenBar"></div>
 
         <div id="posts-container" class="pt-1.5">${PostGrid()}</div>
@@ -61,75 +72,83 @@ const Home = (params, el) => {
     const refreshIcon = el.querySelector("#refreshIcon");
     const filterBar = el.querySelector("#filterBar");
     const hiddenBar = el.querySelector("#hiddenBar");
+    
+    if (!topicSearch) {
+      r.navigateTo("home", { params: { topic: "all" }, forceReload: true });
+    }
 
-    let activeTopic = "all";
+    let activeTopic = topicSearch || "all";
     let showingHidden = false;
+    let algeriaTechPosts = [];
+    let algeriaTechLoading = false;
 
     const shareStory = async (post) => {
-    const text = `${post.title}\n\n${post.url}`;
+      const text = `${post.title}\n\n${post.url}`;
 
-    if (window.Android && Android.shareText) {
-      try {
-        Android.shareText(text);
-      } catch {}
-      return;
-    }
-
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: post.title, text, url: post.url });
+      if (window.Android && Android.shareText) {
+        try {
+          Android.shareText(text);
+        } catch {}
         return;
-      } catch {
-        // user cancelled or unsupported — fall through
       }
-    }
 
-    try {
-      await navigator.clipboard.writeText(text);
-      Toast.show("Story copied — share it anywhere");
-    } catch {
-      Toast.show("Couldn't share this story");
-    }
-  };
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: post.title, text, url: post.url });
+          return;
+        } catch {
+          // user cancelled or unsupported — fall through
+        }
+      }
 
-  const openStoryComments = (postId) => {
-    const post =
+      try {
+        await navigator.clipboard.writeText(text);
+        Toast.show("Story copied — share it anywhere");
+      } catch {
+        Toast.show("Couldn't share this story");
+      }
+    };
+
+    const findPost = (postId) =>
       POSTS.find((item) => String(item.id) === String(postId)) ||
+      algeriaTechPosts.find((item) => String(item.id) === String(postId)) ||
       getSavedPosts().find((item) => String(item.id) === String(postId));
 
-    if (!post) {
-      console.warn("Post not found:", postId);
-      Toast.show("Story not available");
-      return;
-    }
+    const openStoryComments = (postId) => {
+      const post = findPost(postId);
 
-    markPostRead(postId);
-    SELECTED_POST = post;
+      if (!post) {
+        console.warn("Post not found:", postId);
+        Toast.show("Story not available");
+        return;
+      }
 
-    try {
-      sessionStorage.setItem("hnly_selected_post", JSON.stringify(post));
-    } catch {}
+      markPostRead(postId);
+      SELECTED_POST = post;
 
-    window.location.hash = "#comments";
-  };
+      try {
+        sessionStorage.setItem("hnly_selected_post", JSON.stringify(post));
+      } catch {}
 
-  const renderHiddenBar = (count) => {
+      r.navigateTo("comments");
+    };
+
+    const renderHiddenBar = (count) => {
       if (!count) return "";
-      return html`
-        <div
-          class="mb-2 flex items-center justify-between rounded-[14px] bg-[#1c1c1e] px-3 py-2"
+      return html` <div
+        class="mb-2 flex items-center justify-between rounded-[14px] bg-[#1c1c1e] px-3 py-2"
+      >
+        <span class="text-[11px] text-white/40">
+          ${count} hidden ${showingHidden ? "· showing" : ""}
+        </span>
+        <button
+          id="showHiddenBtn"
+          type="button"
+          class="text-[12px] font-semibold text-[#ff6600]"
         >
-          <span class="text-[11px] text-white/40">
-            ${count} hidden ${showingHidden ? "· showing" : ""}
-          </span>
-          <button
-            id="showHiddenBtn"
-            type="button"
-            class="text-[12px] font-semibold text-[#ff6600]"
-          >
-            ${showingHidden ? "Restore" : "Show"}
-          </button>
-        </div>`;
+          ${showingHidden ? "Restore" : "Show"}
+        </button>
+      </div>`;
     };
 
     // ------------------------------------------
@@ -154,19 +173,96 @@ const Home = (params, el) => {
     const renderPosts = () => {
       const hid = getHiddenIdSet();
 
-      const visible = POSTS.filter((post) => {
-        if (activeTopic !== "all" && post._topic !== activeTopic) {
-          return false;
-        }
-        if (!showingHidden && hid.has(String(post.id))) return false;
-        return true;
-      });
+      let visible;
+      if (activeTopic === "algeriaTech") {
+        visible = algeriaTechPosts.filter((post) => !hid.has(String(post.id)));
+      } else {
+        visible = POSTS.filter((post) => {
+          if (activeTopic !== "all" && post._topic !== activeTopic) {
+            return false;
+          }
+          if (!showingHidden && hid.has(String(post.id))) return false;
+          return true;
+        });
+      }
 
       container.innerHTML = PostGrid(visible);
       filterBar.innerHTML = renderTopicChips(activeTopic);
       hiddenBar.innerHTML = renderHiddenBar(hid.size);
       animateCardsIn();
       centerActiveChip();
+    };
+
+    const loadAlgeriaTech = async () => {
+      if (algeriaTechLoading) return;
+      algeriaTechLoading = true;
+      try {
+        algeriaTechPosts = await getAlgeriaTechPosts();
+        if (activeTopic === "algeriaTech") renderPosts();
+        if (activeTopic === "algeriaTech") showAlgeriaNotice();
+      } catch (error) {
+        console.error("[Home] Failed to load Algeria Tech posts:", error);
+        algeriaTechPosts = [];
+        if (activeTopic === "algeriaTech") renderPosts();
+      } finally {
+        algeriaTechLoading = false;
+      }
+    };
+
+    const ALGERIA_NOTICE_KEY = "hnly_algeria_notice";
+
+    // Shows a one-time-only sheet reminding the user the Algeria Tech tab is
+    // curated exclusively for local Algerians. Persists a flag so it never
+    // reappears across sessions on the same device.
+    const showAlgeriaNotice = () => {
+      if (safeStorage.get(ALGERIA_NOTICE_KEY)) return;
+      safeStorage.set(ALGERIA_NOTICE_KEY, "1");
+
+      const sheet = new BottomSheet({
+        content: html`
+          <div class="px-2 pt-2 pb-6 text-center">
+            <div
+              class="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#ff6600]/10"
+            >
+              <span
+                class="mdi mdi-flag-variant text-[30px] text-[#ff6600]"
+              ></span>
+            </div>
+
+            <h2
+              class="mt-3.5 text-[22px] font-bold uppercase tracking-[-0.02em] text-white"
+            >
+              Algeria-Only Tech Feed
+            </h2>
+
+            <p
+              class="mx-auto mt-1.5 max-w-[300px] text-[14px] leading-relaxed text-white/55"
+            >
+              This tab is curated for local Algerians only, stories focused on
+              Algeria's tech scene. News that isn't about Algeria won't appear
+              here.
+            </p>
+
+            <div class="mt-6">
+              <button
+                id="algeriaNoticeOkBtn"
+                class="ripple-container flex h-[50px] w-full items-center justify-center rounded-full bg-[#ff6600] text-[15px] font-semibold text-white shadow-[0_8px_22px_rgba(255,102,0,0.35)] transition-all active:scale-[0.97]"
+              >
+                I understand
+              </button>
+            </div>
+          </div>
+        `,
+      });
+
+      setTimeout(() => {
+        sheet.show().then((sh) => {
+          sh.querySelector("#algeriaNoticeOkBtn").addEventListener(
+            "click",
+            () => sheet.dismiss(),
+          );
+        });
+      }, 400);
     };
 
     // Keeps the selected topic chip centered in the horizontal chip bar
@@ -225,7 +321,7 @@ const Home = (params, el) => {
         e.stopPropagation();
 
         const postId = saveBtn.dataset.saveid;
-        const post = POSTS.find((item) => String(item.id) === String(postId));
+        const post = findPost(postId);
 
         if (!post) {
           console.warn("Post not found:", postId);
@@ -275,9 +371,7 @@ const Home = (params, el) => {
       if (shareBtn) {
         e.preventDefault();
         e.stopPropagation();
-        const post = POSTS.find(
-          (item) => String(item.id) === String(shareBtn.dataset.share),
-        );
+        const post = findPost(shareBtn.dataset.share);
         if (post) shareStory(post);
         return;
       }
@@ -297,9 +391,9 @@ const Home = (params, el) => {
       if (whyBtn) {
         e.preventDefault();
         e.stopPropagation();
-        const panel = whyBtn.closest("article")?.querySelector(
-          "[data-why-panel]",
-        );
+        const panel = whyBtn
+          .closest("article")
+          ?.querySelector("[data-why-panel]");
         if (panel) panel.classList.toggle("hidden");
         return;
       }
@@ -339,7 +433,16 @@ const Home = (params, el) => {
       const chip = e.target.closest("[data-topic]");
       if (!chip) return;
       activeTopic = chip.dataset.topic;
-      renderPosts();
+      history.pushState(
+        null,
+        "",
+        `#home?topic=${encodeURIComponent(activeTopic)}`,
+      );
+      if (activeTopic === "algeriaTech") {
+        loadAlgeriaTech();
+      } else {
+        renderPosts();
+      }
     });
 
     hiddenBar.addEventListener("click", (e) => {
@@ -356,18 +459,17 @@ const Home = (params, el) => {
       if (LOADING) return;
 
       LOADING = true;
-      refreshBtn.setAttribute("disabled", LOADING);
       refreshIcon.classList.add("mdi-spin");
 
       try {
         container.innerHTML = PostGrid();
 
-        POSTS = await getDailyHackerNews(100, {
-          forceRefresh: true,
-        });
-
-        if (POSTS && POSTS.length) {
-          localStorage.removeItem(HN_CONFIG.CACHE_KEY);
+        if (activeTopic === "algeriaTech") {
+          algeriaTechPosts = await getAlgeriaTechPosts({ forceRefresh: true });
+        } else {
+          POSTS = await getDailyHackerNews(320, {
+            forceRefresh: true,
+          });
         }
 
         LOADING = false;
@@ -414,7 +516,6 @@ const Home = (params, el) => {
           ?.addEventListener("click", () => refreshBtn.click());
       } finally {
         refreshIcon.classList.remove("mdi-spin");
-        refreshBtn.setAttribute("disabled", LOADING);
       }
     });
 
@@ -423,10 +524,16 @@ const Home = (params, el) => {
     // ------------------------------------------
 
     try {
-      POSTS = await getDailyHackerNews(100);
-      LOADING = false;
-
-      renderPosts();
+      if (activeTopic === "algeriaTech") {
+        algeriaTechPosts = await getAlgeriaTechPosts();
+        LOADING = false;
+        renderPosts();
+        showAlgeriaNotice();
+      } else {
+        POSTS = await getDailyHackerNews(320);
+        LOADING = false;
+        renderPosts();
+      }
     } catch (error) {
       LOADING = false;
 

@@ -29,7 +29,7 @@ const SavedPostGrid = (posts) => {
         class="p-1.5 columns columns-1 md:columns-2 lg:columns-3 xl:columns-4 space-y-3 gap-x-3"
       >
         ${posts
-          .map((post) => PostCard(post, savedIds, readIds , true))
+          .map((post) => PostCard(post, savedIds, readIds, true, post._source === "algeriatech"))
           .join("")}
       </div>`
     : EmptyState("mdi-bookmark-remove-outline", "No posts saved");
@@ -46,7 +46,15 @@ const PostGrid = (posts = POSTS) => {
           class="columns columns-1 md:columns-2 lg:columns-3 xl:columns-4 space-y-3 gap-x-3"
         >
           ${posts
-            .map((post) => PostCard(post, savedIds, readIds))
+            .map((post) =>
+              PostCard(
+                post,
+                savedIds,
+                readIds,
+                false,
+                post._source === "algeriatech",
+              ),
+            )
             .join("")}
         </div>`
       : EmptyState("mdi-newspaper-variant-outline", "No stories found")}`;

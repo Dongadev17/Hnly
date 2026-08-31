@@ -4,13 +4,20 @@
  * Configuration
  * ============================================================ */
 const HN_CONFIG = {
-  CACHE_KEY: "daily_hacker_news_v2", // v2: posts now carry _topic/_feeds/_rank/_why
+  CACHE_KEY: "daily_hacker_news_v3", // v3: selects up to MIN_PER_TOPIC posts per topic
   SAVED_POSTS_KEY: "saved_hacker_news_posts",
   READ_POSTS_KEY: "hnly_read_posts",
   HIDDEN_POSTS_KEY: "hnly_hidden_posts",
   CACHE_TTL_MS: 5 * 60 * 1000, // how long a cached result is considered fresh
+  // Fetched directly from the WordPress REST API filtered by the "Algeria" tag
+  // (id 119), so only stories about Algeria itself are returned. The RSS feed
+  // and keyword-scanning were replaced because the site's full-article body
+  // embeds a "Relevance for Algeria" block in every post (false positives).
+  ALGERIA_TAG_URL:
+    "https://algeriatech.news/wp-json/wp/v2/posts?tags=119&per_page=20&_fields=id,title,link,excerpt,date",
+  ALGERIA_TECH_CACHE_KEY: "algeria_news_v3", // v3: switched from RSS feed to WP REST API by Algeria tag
   FEEDS: ["topstories", "beststories", "newstories"],
-  MAX_CANDIDATES: 180, // cap on how many story IDs we fetch details for
+  MAX_CANDIDATES: 320, // cap on how many story IDs we fetch details for
   FETCH_TIMEOUT_MS: 8000,
   FETCH_CONCURRENCY: 12, // max parallel item requests when fetching story details
   FRESHNESS_WINDOW_HOURS: 72, // stories older than this get ~0 freshness score
@@ -26,6 +33,10 @@ const HN_CONFIG = {
     topicBonus: 0.2,
     topicPenalty: 0.1,
   },
+  // Floor of posts reserved for every topic chip, so no topic is left almost
+  // empty. Best-effort: a topic returns fewer than this if the day's feed pool
+  // simply doesn't contain that many matching stories.
+  MIN_PER_TOPIC: 20,
 };
 
 const TOPIC_PATTERNS = {
@@ -235,6 +246,95 @@ const fetchJSON = async (url, timeout = HN_CONFIG.FETCH_TIMEOUT_MS) => {
  */
 const fetchItem = (id) =>
   fetchJSON(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
+
+/**
+ * Fetches Algeria-only stories from the WordPress REST API, filtered by the
+ * dedicated "Algeria" tag. The WP API sends proper CORS headers (unlike the
+ * bare RSS feed), so it can be fetched directly from the browser.
+ * @returns {Promise<object[]>} raw WP API post objects, or [] on failure
+ */
+const fetchAlgeriaTechFeed = async () => {
+  try {
+    const data = await fetchJSON(HN_CONFIG.ALGERIA_TAG_URL);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.warn("[HN] Algeria Tech feed failed:", error);
+  }
+  return [];
+};
+
+/**
+ * Converts a WordPress REST API post object into the app's canonical post shape.
+ * @param {object} item - WP API post ({ id, title.rendered, link, excerpt.rendered, date })
+ * @returns {object|null} normalized post, or null if invalid
+ */
+const normalizeFeedItem = (item) => {
+  const title = stripTags(item.title?.rendered).trim();
+  const link = String(item.link ?? "").trim();
+
+  if (!title || !link) return null;
+
+  let domain = "algeriatech.news";
+  try {
+    const host = new URL(link).hostname;
+    domain = (host.startsWith("www.") ? host.slice(4) : host).toLowerCase();
+  } catch {}
+
+  const timeSec = item.date
+    ? Math.floor(new Date(item.date).getTime() / 1000) || 0
+    : 0;
+
+  return {
+    id: item.id,
+    title: title.slice(0, 300),
+    url: link,
+    description: stripTags(item.excerpt?.rendered).slice(0, 500),
+    image: null,
+    source: "Algeria Tech",
+    author: "ALGERIATECH Editorial",
+    score: 0,
+    comments: 0,
+    time: timeSec,
+    category: "Technology",
+    _domain: domain,
+    _topic: "algeriaTech",
+    _feeds: [],
+    _source: "algeriatech",
+  };
+};
+
+/**
+ * Fetches and normalizes Algeria-only posts from the WordPress REST API.
+ * Returns cached results when fresh; bypasses cache with forceRefresh.
+ * @param {{forceRefresh?: boolean}} [options]
+ * @returns {Promise<object[]>}
+ */
+const getAlgeriaTechPosts = async ({ forceRefresh = false } = {}) => {
+  if (!forceRefresh) {
+    const cached = safeStorage.get(HN_CONFIG.ALGERIA_TECH_CACHE_KEY);
+    if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
+      const age = Date.now() - cached.timestamp;
+      if (age < HN_CONFIG.CACHE_TTL_MS) {
+        return cached.posts;
+      }
+      safeStorage.remove(HN_CONFIG.ALGERIA_TECH_CACHE_KEY);
+    }
+  }
+
+  const rawItems = await fetchAlgeriaTechFeed();
+  const posts = rawItems.map(normalizeFeedItem).filter(Boolean);
+  const unique = deduplicatePosts(posts);
+
+  const maxPosts = 20;
+  const finalPosts = unique.slice(0, maxPosts);
+
+  safeStorage.set(HN_CONFIG.ALGERIA_TECH_CACHE_KEY, {
+    timestamp: Date.now(),
+    posts: finalPosts,
+  });
+
+  return finalPosts;
+};
 
 /**
  * Fetches and merges story IDs from all configured HN feeds.
@@ -550,16 +650,47 @@ const scorePosts = (posts) => {
 const selectDiverse = (scoredPosts, count) => {
   const { domainBonus, domainPenalty, topicBonus, topicPenalty } =
     HN_CONFIG.DIVERSITY;
+  const minPerTopic = HN_CONFIG.MIN_PER_TOPIC;
   const maxPerDomain = Math.max(1, Math.ceil(count / 3));
   const maxPerTopic = Math.max(1, Math.ceil(count / 2));
 
-  const remaining = [...scoredPosts].sort(
+  const ranked = [...scoredPosts].sort(
     (a, b) => b._baseScore - a._baseScore,
   );
+
+  // Phase 1 — floor pass: reserve up to MIN_PER_TOPIC of the best stories for
+  // every topic, so a topic chip is never left nearly empty. Best-effort: a
+  // topic with fewer qualifying stories just yields what it has.
+  const orderedTopicKeys = Object.keys(TOPIC_PATTERNS);
+  const reservedByTopic = new Map(orderedTopicKeys.map((key) => [key, 0]));
+  const floorSelected = [];
+  const pool = new Set(ranked);
+
+  for (const topic of orderedTopicKeys) {
+    for (const post of ranked) {
+      if (reservedByTopic.get(topic) >= minPerTopic) break;
+      if (!pool.has(post) || post._topic !== topic) continue;
+      pool.delete(post);
+      reservedByTopic.set(topic, reservedByTopic.get(topic) + 1);
+      floorSelected.push(post);
+    }
+  }
+
+  const remaining = [...pool];
+  const selected = [];
   const domainCounts = new Map();
   const topicCounts = new Map();
-  const selected = [];
+  const reservePost = (post) => {
+    selected.push(post);
+    domainCounts.set(post._domain, (domainCounts.get(post._domain) || 0) + 1);
+    topicCounts.set(post._topic, (topicCounts.get(post._topic) || 0) + 1);
+    post._why = buildWhy(post);
+  };
 
+  floorSelected.forEach(reservePost);
+
+  // Phase 2 — top-up pass: fill the rest of the budget with the existing
+  // greedy domain/topic diversity loop so "All" keeps a rich headline feed.
   while (selected.length < count && remaining.length > 0) {
     let bestIndex = -1;
     let bestScore = -Infinity;
@@ -591,28 +722,28 @@ const selectDiverse = (scoredPosts, count) => {
     const chosen = remaining[bestIndex];
     remaining[bestIndex] = remaining[remaining.length - 1];
     remaining.pop();
-
-    // Human-readable "why this story?" justification, shown on the card.
-    const reasons = [];
-    if (chosen._rank) reasons.push(`#${chosen._rank} overall on HN right now`);
-    if (chosen.score || chosen.comments) {
-      reasons.push(`${chosen.score} points · ${chosen.comments} comments`);
-    }
-    if (chosen.time) reasons.push(`Posted ${timeAgo(chosen.time)}`);
-    if (chosen._feeds && chosen._feeds.length > 1) {
-      reasons.push(`Heats up ${chosen._feeds.length} HN feeds at once`);
-    }
-    chosen._why = reasons.slice(0, 3);
-
-    selected.push(chosen);
-    domainCounts.set(
-      chosen._domain,
-      (domainCounts.get(chosen._domain) || 0) + 1,
-    );
-    topicCounts.set(chosen._topic, (topicCounts.get(chosen._topic) || 0) + 1);
+    reservePost(chosen);
   }
 
   return selected;
+};
+
+/**
+ * Builds the human-readable "why this story?" justification shown on the card.
+ * @param {object} chosen - a selected post carrying `_rank`, `score`, `comments`, `time`, `_feeds`
+ * @returns {string[]} up to three joined reasons
+ */
+const buildWhy = (chosen) => {
+  const reasons = [];
+  if (chosen._rank) reasons.push(`#${chosen._rank} overall on HN right now`);
+  if (chosen.score || chosen.comments) {
+    reasons.push(`${chosen.score} points · ${chosen.comments} comments`);
+  }
+  if (chosen.time) reasons.push(`Posted ${timeAgo(chosen.time)}`);
+  if (chosen._feeds && chosen._feeds.length > 1) {
+    reasons.push(`Heats up ${chosen._feeds.length} HN feeds at once`);
+  }
+  return reasons.slice(0, 3);
 };
 
 /**
@@ -636,7 +767,9 @@ const getDailyHackerNews = async (
       const age = Date.now() - cached.timestamp;
       if (age < HN_CONFIG.CACHE_TTL_MS) {
         // Toast.show("Using cached posts");
-        return cached.posts.slice(0, count);
+        // Return the full cached set (not trimmed to `count`) so every topic
+        // chip stays stocked with up to MIN_PER_TOPIC posts until refresh.
+        return cached.posts;
       }
       safeStorage.remove(HN_CONFIG.CACHE_KEY);
     }

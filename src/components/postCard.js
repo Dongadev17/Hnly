@@ -30,6 +30,7 @@ const PostCard = (
   savedIds = new Set(),
   readIds = new Set(),
   hideInfo = false,
+  isAlgerianPost = false,
 ) => {
   const id = String(post.id);
   const saved = savedIds.has(id);
@@ -52,17 +53,20 @@ const PostCard = (
                 class="flex items-center gap-0.5 bg-white/5 rounded-full shadow-md py-0.5 leading-tight px-2"
               >
                 <span class="mdi mdi-check text-[12px]"></span>
-                <p class="text-[9.5px]">Read</p>
+                <p class="text-[9.5px]">Seen</p>
               </div>`
             : ""}
         </div>
 
         <span class="flex shrink-0 items-center gap-2.5">
-          <span class="flex items-center gap-1">
-            <span class="mdi mdi-arrow-up text-[13px] text-[#ff6600]"></span>
-            <span class="font-semibold text-white/55">${score}</span>
-          </span>
-
+          ${isAlgerianPost
+            ? ""
+            : html` <span class="flex items-center gap-1">
+                <span
+                  class="mdi mdi-arrow-up text-[13px] text-[#ff6600]"
+                ></span>
+                <span class="font-semibold text-white/55">${score}</span>
+              </span>`}
           ${!hideInfo && why.length
             ? html`<button
                 type="button"
@@ -146,7 +150,9 @@ const PostCard = (
           ></span>
         </a>
 
-        <div class="mt-2 grid grid-cols-4 gap-2">
+        <div
+          class="mt-2 grid gap-2 ${isAlgerianPost ? "grid-cols-3" : "grid-cols-4"}"
+        >
           <button
             type="button"
             data-saveid="${escapeHTML(id)}"
@@ -163,20 +169,22 @@ const PostCard = (
             ></span>
           </button>
 
-          <button
-            type="button"
-            data-comments="${escapeHTML(id)}"
-            class="ripple-container flex h-10 items-center justify-center rounded-full bg-[#2c2c2e] text-white/65 transition-all"
-            aria-label="Open comments"
-            title="Open comments"
-          >
-            <span class="mdi mdi-comment-outline text-[17px]"></span>
-            ${commentCount > 0
-              ? html`<span class="text-xs pb-1 pl-1.5 font-medium"
-                  >${commentCount > 99 ? "99+" : commentCount}</span
-                >`
-              : ""}
-          </button>
+          ${isAlgerianPost
+            ? ""
+            : html`<button
+                type="button"
+                data-comments="${escapeHTML(id)}"
+                class="ripple-container flex h-10 items-center justify-center rounded-full bg-[#2c2c2e] text-white/65 transition-all"
+                aria-label="Open comments"
+                title="Open comments"
+              >
+                <span class="mdi mdi-comment-outline text-[17px]"></span>
+                ${commentCount > 0
+                  ? html`<span class="text-xs pb-1 pl-1.5 font-medium"
+                      >${commentCount > 99 ? "99+" : commentCount}</span
+                    >`
+                  : ""}
+              </button>`}
 
           <button
             type="button"
