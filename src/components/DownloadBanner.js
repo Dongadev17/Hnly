@@ -41,7 +41,7 @@ const DownloadBanner = () => html`
       </div>
 
       <span
-        class="flex shrink-0 items-center gap-1 rounded-full bg-white px-3.5 py-2 text-[12px] font-semibold text-black"
+        class="flex shrink-0 items-center gap-1 rounded-full bg-white px-3.5 py-2 text-[13px] font-semibold text-black"
       >
         <span class="mdi mdi-download text-[13px]"></span>
         Download

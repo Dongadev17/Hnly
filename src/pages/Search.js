@@ -53,7 +53,7 @@ const renderSearchResultGrid = (posts) => {
           .map((post) => PostCard(post, savedIds, readIds))
           .join("")}
       </div>`
-    : html`<div class="px-4 pt-16 text-center text-[12px] text-white/35">
+    : html`<div class="px-4 pt-16 text-center text-[15px] text-white/45">
         No results found
       </div>`;
 };
@@ -107,7 +107,7 @@ const Search = (params, el) => {
             autocomplete="off"
             autocapitalize="off"
             spellcheck="false"
-            class="w-full bg-transparent text-[14px] text-white outline-none placeholder:text-white/30"
+            class="w-full bg-transparent text-[15px] text-white outline-none placeholder:text-white/30"
           />
           <button
             id="searchClearBtn"
@@ -132,12 +132,12 @@ const Search = (params, el) => {
     const render = (withMoreMarker) => {
       resultsBox.innerHTML = html`
         ${state.loading
-          ? html`<div class="px-4 pt-16 text-center text-[12px] text-white/35">
+          ? html`<div class="px-4 pt-16 text-center text-[15px] text-white/45">
               Searching…
             </div>`
           : state.query
             ? renderSearchResultGrid(state.results) + (withMoreMarker && state.page + 1 < state.nbPages ? renderLoadMore(state.results.length) : "")
-            : html`<div class="px-4 pt-16 text-center text-[12px] text-white/35">
+            : html`<div class="px-4 pt-16 text-center text-[15px] text-white/45">
                 Type to search over Hacker News stories
               </div>`}
       `;
@@ -178,7 +178,7 @@ const Search = (params, el) => {
               <h2 class="mt-4 text-[15px] font-semibold text-white">
                 Search failed
               </h2>
-              <p class="mt-1 max-w-[260px] text-[12px] leading-relaxed text-white/35">
+              <p class="mt-1 max-w-[260px] text-[13px] leading-relaxed text-white/35">
                 Check your connection and try again.
               </p>
             </div>
@@ -241,12 +241,12 @@ const Search = (params, el) => {
       if (commentsBtn) {
         e.preventDefault();
         e.stopPropagation();
-        const post = state.results.find(
-          (p) => String(p.id) === String(commentsBtn.dataset.comments),
-        );
-        if (post) {
-          markPostRead(post.id);
-          SELECTED_POST = post;
+          const post = state.results.find(
+            (p) => String(p.id) === String(commentsBtn.dataset.comments),
+          );
+          if (post) {
+            markPostRead(post.id, post);
+            SELECTED_POST = post;
           try {
             sessionStorage.setItem("hnly_selected_post", JSON.stringify(post));
           } catch {}
@@ -288,7 +288,10 @@ const Search = (params, el) => {
       if (hideBtn) {
         e.preventDefault();
         e.stopPropagation();
-        hidePost(hideBtn.dataset.hide);
+        const post = state.results.find(
+          (p) => String(p.id) === String(hideBtn.dataset.hide),
+        );
+        if (post) hidePost(post);
         const card = hideBtn.closest("article");
         if (card) card.remove();
         return;
@@ -300,7 +303,7 @@ const Search = (params, el) => {
         const postId = link.dataset.postid;
         if (!url) return;
         if (postId) {
-          markPostRead(postId);
+          markPostRead(postId, state.results.find((p) => String(p.id) === String(postId)));
           const card = link.closest("article");
           if (card) {
             card

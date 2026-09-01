@@ -8,6 +8,12 @@ const HN_CONFIG = {
   SAVED_POSTS_KEY: "saved_hacker_news_posts",
   READ_POSTS_KEY: "hnly_read_posts",
   HIDDEN_POSTS_KEY: "hnly_hidden_posts",
+  READ_EVENTS_KEY: "hnly_read_events", // v1: {id, t, day, topic, domain} per read, for stats + personalization
+  PERSONALIZE_KEY: "hnly_personalization", // "1" enables topic-affinity re-ranking of the feed
+  PERSONALIZE_TOPICS_KEY: "hnly_personalize_topics", // up to 3 chosen topic keys the user wants to see more of
+  OFFLINE_FEED_KEY: "hnly_offline_feed", // persistent snapshot of the last successful HN fetch
+  OFFLINE_ALGERIA_KEY: "hnly_offline_algeria", // persistent snapshot of the last successful Algeria fetch
+  OFFLINE_COMMENTS_KEY: "hnly_offline_comments", // {[storyId]: {t, story, nodes}} cached comment threads
   CACHE_TTL_MS: 5 * 60 * 1000, // how long a cached result is considered fresh
   // Fetched directly from the WordPress REST API filtered by the "Algeria" tag
   // (id 119), so only stories about Algeria itself are returned. The RSS feed
@@ -38,6 +44,12 @@ const HN_CONFIG = {
   // simply doesn't contain that many matching stories.
   MIN_PER_TOPIC: 20,
 };
+
+// Read-event bounds: keep the newest ~600 events, nothing older than 180 days.
+const READ_EVENTS_MAX = 600;
+const READ_EVENTS_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+// Comment threads cached for offline viewing (newest N stories kept).
+const OFFLINE_COMMENTS_MAX = 12;
 
 const TOPIC_PATTERNS = {
   ai: [
@@ -329,6 +341,12 @@ const getAlgeriaTechPosts = async ({ forceRefresh = false } = {}) => {
   const finalPosts = unique.slice(0, maxPosts);
 
   safeStorage.set(HN_CONFIG.ALGERIA_TECH_CACHE_KEY, {
+    timestamp: Date.now(),
+    posts: finalPosts,
+  });
+
+  // Persistent (no TTL) cross-session copy so Algeria Tech still loads offline.
+  safeStorage.set(HN_CONFIG.OFFLINE_ALGERIA_KEY, {
     timestamp: Date.now(),
     posts: finalPosts,
   });
@@ -809,6 +827,13 @@ const getDailyHackerNews = async (
     posts: finalPosts,
   });
 
+  // Persistent (no TTL) mirror of the last successful fetch, so the app can
+  // still show a feed when offline. Written only on network success.
+  safeStorage.set(HN_CONFIG.OFFLINE_FEED_KEY, {
+    timestamp: Date.now(),
+    posts: finalPosts,
+  });
+
   return finalPosts;
 };
 
@@ -859,17 +884,89 @@ const toggleSavePost = (post) => {
  * Read / hidden state
  * ============================================================ */
 
+/**
+ * Local calendar-day key ("YYYY-MM-DD") for a timestamp, used to group
+ * reading activity into days for stats (streaks, bar charts) and
+ * topic-affinity personalization.
+ * @param {number} ts - epoch milliseconds
+ * @returns {string}
+ */
+const dayKey = (ts) => {
+  const d = new Date(ts);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+};
+
 /** @returns {Set<string>} all read post IDs */
 const getReadIdSet = () => new Set(safeStorage.get(HN_CONFIG.READ_POSTS_KEY) || []);
 
+/** @returns {object[]} chronological read events ({id, t, day, topic, domain}) */
+const getReadEvents = () => safeStorage.get(HN_CONFIG.READ_EVENTS_KEY) || [];
+
 /**
- * Marks a post as read (idempotent).
- * @param {string|number} id
+ * One-time migration: legacy `hnly_read_posts` ids (saved as bare ids with no
+ * timestamps) become a single "today" event each, so old reads inform stats
+ * and personalization instead of vanishing. Runs only when the events key has
+ * never been written.
  */
-const markPostRead = (id) => {
+const backfillReadEvents = () => {
+  if (safeStorage.get(HN_CONFIG.READ_EVENTS_KEY) !== null) return;
+  const legacy = safeStorage.get(HN_CONFIG.READ_POSTS_KEY);
+  if (!Array.isArray(legacy) || legacy.length === 0) return;
+
+  const now = Date.now();
+  const day = dayKey(now);
+  const events = Array.from(new Set(legacy.map(String))).map((id) => ({
+    id,
+    t: now,
+    day,
+    topic: null,
+    domain: null,
+  }));
+  safeStorage.set(HN_CONFIG.READ_EVENTS_KEY, events);
+};
+
+/**
+ * Marks a post as read (idempotent) and records a stats event — at most one
+ * per post per day, so re-opening a story counts once.
+ * @param {string|number} id
+ * @param {object} [post] - the story object (for _topic/_domain signals)
+ */
+const markPostRead = (id, post = null) => {
   const ids = getReadIdSet();
   ids.add(String(id));
   safeStorage.set(HN_CONFIG.READ_POSTS_KEY, [...ids]);
+
+  backfillReadEvents();
+
+  const events = getReadEvents();
+  const now = Date.now();
+  const entry = {
+    id: String(id),
+    t: now,
+    day: dayKey(now),
+    topic: post?._topic || null,
+    domain: post?._domain || null,
+  };
+
+  const last = events.find(
+    (ev) => ev.id === String(id) && ev.day === entry.day,
+  );
+  if (last) {
+    last.t = now;
+    last.topic = entry.topic ?? last.topic;
+    last.domain = entry.domain ?? last.domain;
+  } else {
+    events.push(entry);
+  }
+
+  const cutoff = Date.now() - READ_EVENTS_MAX_AGE_MS;
+  const pruned = events
+    .filter((ev) => ev.t >= cutoff)
+    .sort((a, b) => b.t - a.t)
+    .slice(0, READ_EVENTS_MAX);
+  safeStorage.set(HN_CONFIG.READ_EVENTS_KEY, pruned);
 };
 
 /** @returns {Set<string>} all hidden post IDs */
@@ -881,17 +978,72 @@ const getHiddenIdSet = () =>
   );
 
 /**
- * Adds a post to the hidden list.
- * @param {string|number} id
+ * Adds a post to the hidden list (idempotent). Accepts a full post object so
+ * the entry can carry `_topic`/`_domain` for personalization penalties.
+ * @param {object|string} post - the story object, or a bare id
  */
-const hidePost = (id) => {
+const hidePost = (post) => {
+  const id = String(typeof post === "object" && post ? post.id : post);
+  if (!id) {
+    console.warn("Hide called without a post id");
+    return;
+  }
+
   const list = safeStorage.get(HN_CONFIG.HIDDEN_POSTS_KEY) || [];
-  const entry = { id: String(id), hiddenAt: Date.now() };
+  const entry = {
+    id,
+    hiddenAt: Date.now(),
+    topic: post?._topic || null,
+    domain: post?._domain || null,
+  };
   safeStorage.set(HN_CONFIG.HIDDEN_POSTS_KEY, [
-    ...list.filter((item) => String(item.id ?? item) !== String(id)),
+    ...list.filter((item) => String(item.id ?? item) !== id),
     entry,
   ]);
 };
 
 /** @returns {string[]} topic keys for the filter chips ("All" is implied) */
 const getTopics = () => Object.keys(TOPIC_PATTERNS);
+
+/**
+ * User-picked "topics to see more of" (max 3). Read from storage and
+ * validated against the known topic keys so stale/corrupt values never leak
+ * into ranking.
+ * @returns {string[]} the saved topic keys (valid, up to 3)
+ */
+const getPersonalizeTopics = () => {
+  const raw = safeStorage.get(HN_CONFIG.PERSONALIZE_TOPICS_KEY);
+  if (!Array.isArray(raw)) return [];
+  const valid = getTopics();
+  return raw
+    .map(String)
+    .filter((key) => valid.includes(key))
+    .slice(0, 3);
+};
+
+/* ============================================================
+ * Offline comment threads
+ * Write-through after every successful Comments load; read back when the
+ * item API is unreachable. Keeps only the newest OFFLINE_COMMENTS_MAX stories.
+ * ============================================================ */
+
+/**
+ * @param {object} story - raw HN item for the story
+ * @param {object[]} nodes - filtered top-level comment objects
+ */
+const saveCommentThreadOffline = (storyId, story, nodes) => {
+  if (!storyId || !story) return;
+  const store = safeStorage.get(HN_CONFIG.OFFLINE_COMMENTS_KEY) || {};
+  store[String(storyId)] = { t: Date.now(), story, nodes: nodes || [] };
+
+  const keys = Object.keys(store).sort(
+    (a, b) => (store[b].t || 0) - (store[a].t || 0),
+  );
+  const next = {};
+  keys.slice(0, OFFLINE_COMMENTS_MAX).forEach((key) => (next[key] = store[key]));
+  safeStorage.set(HN_CONFIG.OFFLINE_COMMENTS_KEY, next);
+};
+
+/** @returns {object|null} cached thread ({t, story, nodes}) for a story id */
+const getCommentThreadOffline = (storyId) =>
+  safeStorage.get(HN_CONFIG.OFFLINE_COMMENTS_KEY)?.[String(storyId)] || null;

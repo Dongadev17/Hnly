@@ -43,7 +43,7 @@ const commentNode = (comment, depth) => {
         ${comment.score ? html`<span>· ${comment.score} pts</span>` : ""}
       </div>
 
-      <div class="mt-1.5 break-words text-[13.5px] leading-relaxed text-white/80">
+      <div class="mt-1.5 break-words text-[14px] leading-relaxed text-white/80">
         ${renderCommentText(comment.text)}
       </div>
 
@@ -99,6 +99,43 @@ const storyHeader = (story, item) => html`
         <span class="flex items-center gap-1">
           <span class="mdi mdi-comment-outline text-[13px]"></span>
           ${Number(item?.descendants ?? story.comments) || 0} comments
+        </span>
+      </div>
+    </article>
+  </div>
+`;
+
+// Story header for an offline thread — includes a subtle "cached" hint and
+// falls back to cached score/comments when the live item is unavailable.
+const storyHeaderForOffline = (story, cached) => html`
+  <div class="px-3">
+    <article
+      class="break-inside-avoid rounded-[24px] bg-[#1c1c1e] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
+    >
+      <div class="flex items-center justify-between text-[11px] text-white/35">
+        <div class="flex items-center gap-2">
+          <span class="mdi mdi-wifi-off text-[13px] text-[#ff6600]"></span>
+          <span>cached</span>
+        </div>
+        <span>${escapeHTML(timeAgo(story.time))}</span>
+      </div>
+
+      <h2
+        class="mt-2.5 text-[17px] font-semibold leading-[1.28] tracking-[-0.02em] text-white"
+      >
+        ${escapeHTML(story.title)}
+      </h2>
+
+      <div class="mt-3 flex items-center gap-3 text-[11px] text-white/35">
+        ${story.author
+          ? html`<span class="flex items-center gap-1">
+              <span class="mdi mdi-account-circle-outline text-[13px]"></span>
+              ${escapeHTML(story.author)}
+            </span>`
+          : ""}
+        <span class="flex items-center gap-1">
+          <span class="mdi mdi-comment-outline text-[13px]"></span>
+          ${cached?.nodes?.length || 0} comments
         </span>
       </div>
     </article>
@@ -201,19 +238,20 @@ const Comments = (params, el) => {
       const kids = Array.isArray(item.kids) ? item.kids : [];
 
       let body;
+      let threadNodes = [];
       if (!kids.length) {
         body = html`
-          <div class="px-4 pt-14 text-center text-[12px] text-white/35">
+          <div class="px-4 pt-14 text-center text-[15px] text-white/45">
             No comments yet
           </div>
         `;
       } else {
         const topLevel = await Promise.all(kids.map(fetchItem));
+        threadNodes = topLevel.filter((c) => c && !c.deleted && !c.dead);
         body = html`
           <div class="px-4 pt-3">
             <div class="space-y-5">
-              ${topLevel
-                .filter((c) => c && !c.deleted && !c.dead)
+              ${threadNodes
                 .map((c) => commentNode(c, 0))
                 .join("")}
             </div>
@@ -221,9 +259,29 @@ const Comments = (params, el) => {
         `;
       }
 
+      // Write-through: keep a copy for offline viewing.
+      saveCommentThreadOffline(story.id, item, threadNodes);
+
       container.innerHTML = html`${storyHeader(story, item)}${body}`;
     } catch (error) {
       console.error("[Comments] Failed to load thread:", error);
+
+      // Offline fallback: render a previously cached thread, if we have one.
+      const cached = getCommentThreadOffline(story.id);
+      if (cached && Array.isArray(cached.nodes)) {
+        container.innerHTML = html`
+          ${storyHeaderForOffline(story, cached)}
+          <div class="px-4 pt-3">
+            <div class="space-y-5">
+              ${cached.nodes
+                .map((c) => commentNode(c, 0))
+                .join("")}
+            </div>
+          </div>
+        `;
+        return;
+      }
+
       container.innerHTML = html`
         ${storyHeader(story, null)}
         <div
@@ -237,7 +295,7 @@ const Comments = (params, el) => {
           <h2 class="mt-4 text-[15px] font-semibold text-white">
             Couldn't load comments
           </h2>
-          <p class="mt-1 max-w-[260px] text-[12px] leading-relaxed text-white/35">
+          <p class="mt-1 max-w-[260px] text-[13px] leading-relaxed text-white/35">
             Check your connection and try again.
           </p>
           <button

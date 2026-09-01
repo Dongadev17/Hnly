@@ -22,6 +22,7 @@ The gitignored `corex.yaml` config drives the wrapper build (bundle + minify). B
 - Cache: `daily_hacker_news_v3` (5 min TTL) — **bump the version suffix when the post set changes**. v2 added `_topic`/`_feeds`/`_rank`/`_why`; v3 changed selection to reserve up to `MIN_PER_TOPIC` posts per topic and grew the pool (`MAX_CANDIDATES: 320`).
 - `algeria_news_v3` (Algeria Tech feed cache, 5 min TTL) — v3 switched from the RSS feed to the WP REST API filtered by the Algeria tag (id 119).
 - `saved_hacker_news_posts`, `hnly_read_posts`, `hnly_hidden_posts` (localStorage, via `safeStorage`); `hnly_selected_post` (sessionStorage, mirrors the Comments route's story); `hnly_algeria_notice` (localStorage, once-ever Algeria-first visit notice).
+- Offline & personalization keys (all localStorage, via `safeStorage`): `hnly_read_events` (per-post read logs — stats + affinity), `hnly_personalization` (`"1"` legacy on/off toggle — superseded by the topic picker, kept for back-compat), `hnly_personalize_topics` (up to 3 user-chosen topic keys to "see more of", picked in a bottom sheet; the feed ranks those topics higher), `hnly_offline_feed` / `hnly_offline_algeria` (persistent snapshots of the last successful fetch), `hnly_offline_comments` (`{storyId: {t, story, nodes}}`, newest 12 kept).
 
 ## Platform & deploy
 - `window.Android` bridge (`getAppVersion`, `openInAppBrowser`, `copyText`) is checked as a property and must degrade gracefully on web.

@@ -37,7 +37,7 @@ const LegalCardList = (sections) => html`
           <section
             class="overflow-hidden rounded-[18px] bg-[#1c1c1e] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
           >
-            <h4 class="text-[13px] font-semibold text-white">${s.title}</h4>
+            <h4 class="text-[15px] font-semibold text-white">${s.title}</h4>
             <p class="mt-1.5 text-[13px] leading-relaxed text-white/55">
               ${s.body}
             </p>

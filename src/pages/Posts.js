@@ -75,7 +75,12 @@ const Posts = (params, el) => {
         e.preventDefault();
         const url = link.dataset.url;
         if (!url) return;
-        if (link.dataset.postid) markPostRead(link.dataset.postid);
+        if (link.dataset.postid) {
+          const saved = getSavedPosts().find(
+            (item) => String(item.id) === String(link.dataset.postid),
+          );
+          markPostRead(link.dataset.postid, saved || null);
+        }
         setTimeout(() => {
           if (typeof Android !== "undefined" && Android.openInBrowser) {
             Android.openInAppBrowser(url);
@@ -94,7 +99,7 @@ const Posts = (params, el) => {
           (item) => String(item.id) === String(commentsBtn.dataset.comments),
         );
         if (post) {
-          markPostRead(post.id);
+          markPostRead(post.id, post);
           SELECTED_POST = post;
           try {
             sessionStorage.setItem("hnly_selected_post", JSON.stringify(post));
@@ -138,7 +143,10 @@ const Posts = (params, el) => {
       if (hideBtn) {
         e.preventDefault();
         e.stopPropagation();
-        hidePost(hideBtn.dataset.hide);
+        const post = getSavedPosts().find(
+          (item) => String(item.id) === String(hideBtn.dataset.hide),
+        );
+        if (post) hidePost(post);
         hideBtn.closest("article")?.remove();
       }
     });

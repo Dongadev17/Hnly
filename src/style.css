@@ -2,6 +2,9 @@
   font-family: "Montserrat", sans-serif;
   font-style: normal;
   font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   user-select: none !important;
 }
 

@@ -33,7 +33,7 @@ const renderTopicChips = (active) => html`
             data-topic="${key}"
             class="shrink-0 rounded-full px-3 py-1.5 text-[12px] transition-colors active:scale-95 ${key ===
             active
-              ? "bg-white text-black font-bold opacity-100"
+              ? "bg-white text-black font-semibold opacity-100"
               : "bg-[#2c2c2e] text-white/60 opacity-60 font-medium"}"
           >
             ${TOPIC_LABELS[key] ?? key}
@@ -43,6 +43,64 @@ const renderTopicChips = (active) => html`
       .join("")}
   </div>
 `;
+
+// Personalized re-ranking — pure render-time, local-only. The user picks up to
+// 3 topics in a bottom sheet (hnly_personalize_topics) to see more of; those
+// get a strong boost. Read/saved topics add a smaller boost and hidden topics
+// a penalty. HN feed only (not Search or Algeria).
+const HOME_PERSONALIZE_LABEL = "Personalize";
+const PERSONALIZE_MAX = 3;
+const PERSONALIZE_TOPIC_BOOST = 5;
+
+// Active when the user has saved at least one "see more of" topic.
+const getPersonalizePref = () => getPersonalizeTopics().length > 0;
+
+// Baseline topic signals from saved / read / hidden history (does NOT include
+// the explicit user picks — those are added separately by personalizePosts).
+const topicAffinity = () => {
+  const affinity = new Map(); // topic -> signed signal
+
+  const savedPosts = getSavedPosts();
+  savedPosts.forEach((post) => {
+    if (post._topic) {
+      affinity.set(post._topic, (affinity.get(post._topic) || 0) + 1);
+    }
+  });
+
+  getReadEvents().forEach((ev) => {
+    if (ev.topic) {
+      affinity.set(ev.topic, (affinity.get(ev.topic) || 0) + 2);
+    }
+  });
+
+  const hidden = safeStorage.get(HN_CONFIG.HIDDEN_POSTS_KEY) || [];
+  hidden.forEach((entry) => {
+    if (entry?.topic) {
+      affinity.set(entry.topic, (affinity.get(entry.topic) || 0) - 4);
+    }
+  });
+
+  return affinity;
+};
+
+const personalizePosts = (visible) => {
+  const personalTopics = getPersonalizeTopics();
+  if (!personalTopics.length) return visible;
+
+  const affinity = topicAffinity();
+
+  // Stable sort: same affinity keeps the editorial order.
+  return [...visible]
+    .map((post) => ({ post, aff: affinity.get(post._topic) || 0 }))
+    .map((x) => {
+      if (personalTopics.includes(x.post._topic)) {
+        x.aff += PERSONALIZE_TOPIC_BOOST;
+      }
+      return x;
+    })
+    .sort((a, b) => b.aff - a.aff)
+    .map((x) => x.post);
+};
 
 const Home = (params, el) => {
   const topicSearch = params.topic;
@@ -58,7 +116,31 @@ const Home = (params, el) => {
       <main class="px-3 pb-8 pt-4">
         <!-- Topic / feed chips -->
         <div id="filterBar">${renderTopicChips(topicSearch || "all")}</div>
+
+        <!-- Personalize toggle (Home "All" feed only) -->
+        <div
+          id="personalizeWrap"
+          class="overflow-hidden transition-[max-height,opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style="${(topicSearch || "all") === "all"
+            ? "max-height:60px;opacity:1;transform:translateY(0);pointer-events:auto"
+            : "max-height:0;opacity:0;transform:translateY(-4px);pointer-events:none"}"
+        >
+          <button
+            id="personalizeToggle"
+            type="button"
+            class="mb-1.5 flex shrink-0 items-center gap-1.5 self-start rounded-full px-3 py-1.5 text-[12px] transition-colors active:scale-95 ${getPersonalizePref()
+              ? "bg-white text-black font-semibold opacity-100"
+              : "bg-[#2c2c2e] text-white/60 opacity-60 font-medium"}"
+            aria-pressed="${getPersonalizePref() ? "true" : "false"}"
+          >
+            <span class="mdi mdi-tune-variant text-[13px]"></span>
+            ${HOME_PERSONALIZE_LABEL}
+          </button>
+        </div>
+
         <div id="hiddenBar"></div>
+
+        <div id="offlineBar" class="hidden"></div>
 
         <div id="posts-container" class="pt-1.5">${PostGrid()}</div>
       </main>
@@ -71,6 +153,8 @@ const Home = (params, el) => {
     const refreshBtn = el.querySelector("#refreshBtn");
     const refreshIcon = el.querySelector("#refreshIcon");
     const filterBar = el.querySelector("#filterBar");
+    const personalizeToggle = el.querySelector("#personalizeToggle");
+    const personalizeWrap = el.querySelector("#personalizeWrap");
     const hiddenBar = el.querySelector("#hiddenBar");
     
     if (!topicSearch) {
@@ -123,7 +207,7 @@ const Home = (params, el) => {
         return;
       }
 
-      markPostRead(postId);
+      markPostRead(postId, post);
       SELECTED_POST = post;
 
       try {
@@ -149,6 +233,26 @@ const Home = (params, el) => {
           ${showingHidden ? "Restore" : "Show"}
         </button>
       </div>`;
+    };
+
+    // Offline banner — appears when the feed is served from a local snapshot.
+    const offlineBar = el.querySelector("#offlineBar");
+    const showOfflineBar = (snapshot) => {
+      if (!offlineBar || !snapshot) return;
+      const when = snapshot.timestamp
+        ? timeAgo(Math.floor(snapshot.timestamp / 1000))
+        : "";
+      offlineBar.classList.remove("hidden");
+      offlineBar.innerHTML = html`
+        <div
+          class="mt-1 mb-2 flex items-center gap-2 rounded-[14px] border border-white/10 bg-[#2c2c2e]/60 px-3 py-2"
+        >
+          <span class="mdi mdi-wifi-off text-[15px] text-[#ff6600]"></span>
+          <span class="text-[11px] text-white/45">
+            Offline · showing saved${when ? ` from ${when}` : ""}
+          </span>
+        </div>
+      `;
     };
 
     // ------------------------------------------
@@ -184,6 +288,7 @@ const Home = (params, el) => {
           if (!showingHidden && hid.has(String(post.id))) return false;
           return true;
         });
+        if (getPersonalizePref()) visible = personalizePosts(visible);
       }
 
       container.innerHTML = PostGrid(visible);
@@ -230,13 +335,13 @@ const Home = (params, el) => {
             </div>
 
             <h2
-              class="mt-3.5 text-[22px] font-bold uppercase tracking-[-0.02em] text-white"
+              class="mt-3.5 text-[22px] font-bold uppercase tracking-[-0.026em] text-white"
             >
               Algeria-Only Tech Feed
             </h2>
 
             <p
-              class="mx-auto mt-1.5 max-w-[300px] text-[14px] leading-relaxed text-white/55"
+              class="mx-auto mt-1.5 max-w-[300px] text-[15px] leading-relaxed text-white/55"
             >
               This tab is curated for local Algerians only, stories focused on
               Algeria's tech scene. News that isn't about Algeria won't appear
@@ -246,7 +351,7 @@ const Home = (params, el) => {
             <div class="mt-6">
               <button
                 id="algeriaNoticeOkBtn"
-                class="ripple-container flex h-[50px] w-full items-center justify-center rounded-full bg-[#ff6600] text-[15px] font-semibold text-white shadow-[0_8px_22px_rgba(255,102,0,0.35)] transition-all active:scale-[0.97]"
+                class="ripple-container flex h-[50px] w-full items-center justify-center rounded-full bg-[#ff6600] text-[16px] font-semibold text-white shadow-[0_8px_22px_rgba(255,102,0,0.35)] transition-all active:scale-[0.97]"
               >
                 I understand
               </button>
@@ -381,7 +486,8 @@ const Home = (params, el) => {
       if (hideBtn) {
         e.preventDefault();
         e.stopPropagation();
-        hidePost(hideBtn.dataset.hide);
+        const post = findPost(hideBtn.dataset.hide);
+        if (post) hidePost(post);
         renderPosts();
         return;
       }
@@ -409,7 +515,7 @@ const Home = (params, el) => {
         if (!url) return;
 
         if (postId) {
-          markPostRead(postId);
+          markPostRead(postId, findPost(postId));
 
           const card = link.closest("article");
           if (card) {
@@ -433,6 +539,7 @@ const Home = (params, el) => {
       const chip = e.target.closest("[data-topic]");
       if (!chip) return;
       activeTopic = chip.dataset.topic;
+      syncPersonalizeVisibility();
       history.pushState(
         null,
         "",
@@ -444,6 +551,157 @@ const Home = (params, el) => {
         renderPosts();
       }
     });
+
+    personalizeToggle.addEventListener("click", () => {
+      openPersonalizeSheet();
+    });
+
+    // Hnly personalizes the "All" feed only, so the button only makes sense
+    // when the "All" topic chip is active. Animate it away for other topics.
+    const syncPersonalizeVisibility = () => {
+      const show = activeTopic === "all";
+      const wrapped = () => {
+        personalizeWrap.style.maxHeight = "0px";
+        personalizeWrap.style.opacity = "0";
+        personalizeWrap.style.transform = "translateY(-4px)";
+        personalizeWrap.style.pointerEvents = "none";
+      };
+      const shown = () => {
+        personalizeWrap.style.maxHeight = "60px";
+        personalizeWrap.style.opacity = "1";
+        personalizeWrap.style.transform = "translateY(0)";
+        personalizeWrap.style.pointerEvents = "auto";
+      };
+      if (show) shown();
+      else wrapped();
+    };
+    syncPersonalizeVisibility();
+
+    // Reflects the saved "see more of" topics onto the pill's active styling.
+    const syncPersonalizePill = () => {
+      const on = getPersonalizePref();
+      personalizeToggle.setAttribute("aria-pressed", on ? "true" : "false");
+      personalizeToggle.classList.toggle("bg-white", on);
+      personalizeToggle.classList.toggle("text-black", on);
+      personalizeToggle.classList.toggle("font-semibold", on);
+      personalizeToggle.classList.toggle("opacity-100", on);
+      personalizeToggle.classList.toggle("bg-[#2c2c2e]", !on);
+      personalizeToggle.classList.toggle("text-white/60", !on);
+      personalizeToggle.classList.toggle("opacity-60", !on);
+    };
+
+    // Bottom sheet: pick up to PERSONALIZE_MAX topics to see more of, then Save.
+    const openPersonalizeSheet = () => {
+      let selected = [...getPersonalizeTopics()];
+      const topicsOrdered = getTopics();
+
+      const topicChip = (key) => {
+        const active = selected.includes(key);
+        return html`
+          <button
+            type="button"
+            data-personalize-topic="${key}"
+            class="ripple-container shrink-0 rounded-full px-3 py-1.5 text-[12px] transition-colors active:scale-95 ${active
+              ? "bg-white text-black font-semibold opacity-100"
+              : "bg-[#2c2c2e] text-white/60 opacity-60 font-medium"}"
+            aria-pressed="${active ? "true" : "false"}"
+          >
+            ${TOPIC_LABELS[key] ?? key}
+          </button>
+        `;
+      };
+
+      const renderChips = () =>
+        topicsOrdered.map(topicChip).join("");
+
+      const sheet = new BottomSheet({
+        content: html`
+          <div class="px-2 pt-2 pb-6">
+            <h2
+              class="text-[22px] font-bold tracking-[-0.026em] text-white"
+            >
+              Personalize
+            </h2>
+            <p class="mt-1 text-[13px] text-white/55">
+              Pick up to ${PERSONALIZE_MAX} topics to see more of in your feed.
+            </p>
+
+            <div
+              data-personalize-count
+              class="mt-3 text-[12px] font-medium text-white/40"
+            >
+              ${selected.length}/${PERSONALIZE_MAX} selected
+            </div>
+
+            <div data-personalize-chips class="mt-2.5 flex flex-wrap gap-2">
+              ${renderChips()}
+            </div>
+
+            <div class="mt-6">
+              <button
+                id="personalizeSaveBtn"
+                class="ripple-container flex h-[50px] w-full items-center justify-center rounded-full bg-[#ff6600] text-[16px] font-semibold text-white shadow-[0_8px_22px_rgba(255,102,0,0.35)] transition-all active:scale-[0.97]"
+              >
+                Save
+              </button>
+              <button
+                id="personalizeCancelBtn"
+                class="ripple-container mt-2.5 flex h-[50px] w-full items-center justify-center rounded-full bg-[#2c2c2e] text-[16px] font-semibold text-white/90 transition-all active:scale-[0.97]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        `,
+      });
+
+      setTimeout(() => {
+        sheet.show().then((sh) => {
+          const chipsBox = sh.querySelector("[data-personalize-chips]");
+          const countBox = sh.querySelector("[data-personalize-count]");
+
+          const rerender = () => {
+            chipsBox.innerHTML = renderChips();
+            countBox.textContent =
+              `${selected.length}/${PERSONALIZE_MAX} selected`;
+          };
+
+          chipsBox.addEventListener("click", (e) => {
+            const chip = e.target.closest("[data-personalize-topic]");
+            if (!chip) return;
+            const key = chip.dataset.personalizeTopic;
+            const idx = selected.indexOf(key);
+            if (idx !== -1) {
+              selected.splice(idx, 1);
+            } else {
+              if (selected.length >= PERSONALIZE_MAX) {
+                Toast.show(`Pick up to ${PERSONALIZE_MAX} topics`);
+                return;
+              }
+              selected.push(key);
+            }
+            rerender();
+          });
+
+          sh.querySelector("#personalizeCancelBtn").addEventListener("click", () => {
+            sheet.dismiss();
+          });
+
+          sh.querySelector("#personalizeSaveBtn").addEventListener("click", () => {
+            safeStorage.set(HN_CONFIG.PERSONALIZE_TOPICS_KEY, selected);
+            sheet.dismiss().then(() => {
+              syncPersonalizePill();
+              Toast.show(
+                selected.length
+                  ? "Personalized — more of your picks up top"
+                  : "Personalization cleared",
+              );
+              if (activeTopic !== "algeriaTech") renderPosts();
+            });
+          });
+        });
+      }, 150);
+    };
 
     hiddenBar.addEventListener("click", (e) => {
       if (!e.target.closest("#showHiddenBtn")) return;
@@ -480,6 +738,22 @@ const Home = (params, el) => {
 
         console.error("[Home] Refresh failed:", error);
 
+        // Offline / network-failure fallback: show the last successful snapshot.
+        const offline =
+          activeTopic === "algeriaTech"
+            ? safeStorage.get(HN_CONFIG.OFFLINE_ALGERIA_KEY)
+            : safeStorage.get(HN_CONFIG.OFFLINE_FEED_KEY);
+        if (offline && Array.isArray(offline.posts) && offline.posts.length > 0) {
+          if (activeTopic === "algeriaTech") {
+            algeriaTechPosts = offline.posts;
+          } else {
+            POSTS = offline.posts;
+          }
+          showOfflineBar(offline);
+          renderPosts();
+          return;
+        }
+
         container.innerHTML = html`
           <div
             class="flex flex-col items-center justify-center px-6 py-20 text-center"
@@ -497,7 +771,7 @@ const Home = (params, el) => {
             </h2>
 
             <p
-              class="mt-1 max-w-[260px] text-[12px] leading-relaxed text-white/35"
+              class="mt-1 max-w-[260px] text-[13px] leading-relaxed text-white/35"
             >
               Check your connection and try again.
             </p>
@@ -539,6 +813,27 @@ const Home = (params, el) => {
 
       console.error("[Home] Failed to load posts:", error);
 
+      // Offline / network-failure fallback: show the last successful snapshot.
+      const offline =
+        activeTopic === "algeriaTech"
+          ? safeStorage.get(HN_CONFIG.OFFLINE_ALGERIA_KEY)
+          : safeStorage.get(HN_CONFIG.OFFLINE_FEED_KEY);
+      if (
+        offline &&
+        Array.isArray(offline.posts) &&
+        offline.posts.length > 0
+      ) {
+        if (activeTopic === "algeriaTech") {
+          algeriaTechPosts = offline.posts;
+          showAlgeriaNotice();
+        } else {
+          POSTS = offline.posts;
+        }
+        showOfflineBar(offline);
+        renderPosts();
+        return;
+      }
+
       container.innerHTML = html`
         <div
           class="flex flex-col items-center justify-center px-6 py-20 text-center"
@@ -554,7 +849,7 @@ const Home = (params, el) => {
           </h2>
 
           <p
-            class="mt-1 max-w-[260px] text-[12px] leading-relaxed text-white/35"
+            class="mt-1 max-w-[260px] text-[13px] leading-relaxed text-white/35"
           >
             We couldn't retrieve today's Hacker News stories.
           </p>

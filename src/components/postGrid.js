@@ -7,7 +7,7 @@ const EmptyState = (icon, title) =>
     >
       <span class="mdi ${icon} text-[26px] text-white/40"></span>
     </div>
-    <p class="mt-4 text-[15px] font-medium text-white/70">${title}</p>
+    <p class="mt-4 text-[15px] font-semibold text-white/70">${title}</p>
   </div>`;
 
 const PostSkeletonGrid = (count = 7) =>

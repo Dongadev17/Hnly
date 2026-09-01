@@ -17,7 +17,9 @@ A curated daily Hacker News feed — ranked every day by popularity, freshness, 
 - **Read · hide · save · share** — each card carries a toolbar: save for later, open the in-app comments, use the native share sheet (or clipboard fallback), or hide a story.
 - **In-app comments** — full HN comment threads load inside the app, with lazily-expanding replies.
 - **Live search** — debounced search across all of Hacker News via the Algolia API, rendered with the same cards.
-- **Cached & offline-friendly** — the daily selection is cached in `localStorage` (5 min TTL); saved posts persist locally too.
+- **Cached & offline-friendly** — the daily selection is cached in `localStorage` (5 min TTL); saved posts persist locally too. A **service worker** caches the app shell + CDN assets, and persistent feed/comment snapshots keep Home and saved comments readable offline.
+- **Reading stats** — a local-only stats page (today's reads, streak, 14-day activity, top topics) built from per-read events that never leave the device.
+- **Personalized re-ranking** — pick up to 3 topics to "see more of" in a bottom sheet, plus affinity from the topics you save/read/hide — all computed locally and applied to the "All" feed.
 - **Smooth "Apple-like" motion** — entrance, list, and removal animations use the Web Animations API with a springy `cubic-bezier(0.22, 1, 0.36, 1)` easing — no animation libraries.
 - **Privacy-first** — no accounts, no tracking, no analytics; everything stays on the device.
 
@@ -61,8 +63,9 @@ Everything below describes **Hnly's own code**.
 ├── src/
 │   ├── index.html                 # Entry point — script order + Content-Security-Policy
 │   ├── engine-bootstrap.js        # Destructures engine globals (Router, html, Toast, …)
-│   ├── main.js                    # APP_INFO, global POSTS/LOADING state, router setup
+│   ├── main.js                    # APP_INFO, global POSTS/LOADING state, router setup, SW registration
 │   ├── style.css                  # Global styles (font, selection, disabled)
+│   ├── sw.js                      # Service worker — app-shell + CDN asset caching (offline)
 │   ├── version.json               # Latest deployed version (used by "Check for updates")
 │   ├── assets/logo.png            # App icon used in the UI
 │   ├── components/                # Reusable HTML-building functions
@@ -71,11 +74,12 @@ Everything below describes **Hnly's own code**.
 │   │   ├── postCard.js            # Story card: toolbar, read state, "why" panel (+ skeleton)
 │   │   └── postGrid.js            # Grid w/ saved+read Sets, skeleton, empty-state renderers
 │   ├── pages/                     # One function per route
-│   │   ├── Home.js                # Feed: topic tabs, hidden bar, refresh, delegated card actions
-│   │   ├── Comments.js            # In-app HN thread: story header + lazily-expanding replies
+│   │   ├── Home.js                # Feed: topic tabs, hidden bar, refresh, personalize sheet, offline fallback
+│   │   ├── Comments.js            # In-app HN thread: story header + lazily-expanding replies (+ offline cache)
 │   │   ├── Search.js              # Live Algolia story search (debounced, load-more)
 │   │   ├── Posts.js               # Saved posts + animated removal + toolbar actions
 │   │   ├── About.js               # iOS-style settings page + actions
+│   │   ├── Stats.js               # Reading stats (streak, 14-day activity, top topics) — local-only
 │   │   ├── Privacy.js             # Privacy Policy (legal card list, reachable from About)
 │   │   └── Terms.js               # Terms & Conditions (shares the legal card list)
 │   └── utils/
@@ -105,6 +109,7 @@ r.add("home", Home, { cache: false })
   .add("comments", Comments, { cache: false })
   .add("search", Search, { cache: false })
   .add("about", About, { cache: false })
+  .add("stats", Stats, { cache: false })
   .add("privacy", Privacy, { cache: false })
   .add("terms", Terms, { cache: false })
 ```
@@ -210,6 +215,10 @@ const SCORE_WEIGHTS = {
 
 Opening a story's comments or article marks it read (`markPostRead`) and stores the ID in `hnly_read_posts`; hiding a story (`hidePost`) stores it in `hnly_hidden_posts`. `getReadIdSet()` / `getHiddenIdSet()` return `Set<string>`s that cards use for read-dimming and the Home hidden-bar. Home's "Show" toggle reveals hidden cards; this is all local-first state — nothing is sent anywhere.
 
+**Stats & personalization events (`getDailyHackerNews.js`)** — `markPostRead` also writes `hnly_read_events` (`{id, t, day, topic, domain}`, at most one per post per day, newest ~600 kept, 180-day horizon; legacy `hnly_read_posts` ids are backfilled as a single "today" event). These feed both the **Reading Stats** page (streak, 14-day bars, top topics) and the **Personalize** sheet: `topicAffinity()` boosts topics you've saved (1) or read (2) and penalizes topics you've hidden (4), while the up-to-3 explicit picks in `hnly_personalize_topics` get a stronger boost (+5); `personalizePosts` then stably re-sorts the filtered feed. `hidePost` accepts a full post so hidden entries carry `_topic`/`_domain`.
+
+**Offline data layer (`getDailyHackerNews.js` + `sw.js`)** — three local snapshots support offline reading: `hnly_offline_feed` (persistent mirror of the last successful HN fetch) and `hnly_offline_algeria` (Algeria, both written only on network success), plus `hnly_offline_comments` (`{storyId: {t, story, nodes}}`, newest 12 kept) written through after each successful Comments load. When a fetch fails, Home falls back to the feed/Algeria snapshot (with an "Offline · showing saved" bar) and Comments falls back to its cached thread (with a "cached" header). `sw.js` pre-caches the app shell + CDN assets on install and cleans up old versions on activate; data/analytics hosts are network-only so they fail cleanly offline.
+
 ### 5. Security hardening
 
 - **Content-Security-Policy** (`index.html`) — `default-src 'self'`; scripts are limited to `'self'`, Tailwind, the engine CDN, and two explicitly *hashed* inline snippets — **no `'unsafe-inline'`**, so injected `<script>` tags are blocked outright. `frame-src`/`object-src` are `'none'`, and `connect-src` is pinned to the HN API, the Algolia search API, the engine CDN, jsDelivr (icons), and the deployed origin.
@@ -232,6 +241,9 @@ Opening a story's comments or article marks it read (`markPostRead`) and stores 
 - **Topic tabs & hidden bar** (`Home.js`) — chips above the feed filter by `_topic`; the hidden bar shows how many stories are hidden and toggles them back.
 - **Toolbar** (`postCard.js`) — every card: ℹ️ "Why this story?" (`data-why`), Read Article (marks read + dims the title), and a bookmark/comments/share/hide row. Save/share/hide/comments all work from Home, Search, and Saved without per-card listeners.
 - **In-app comments** (`Comments.js`) — the selected story is rendered as a header card and its thread is fetched from the Algolia-adjacent Firebase item API; top-level comments show immediately and replies expand lazily. All comment text is escaped; `data-replies-toggle` drives collapse/expand.
+- **Reading Stats** (`Stats.js`) — renders an iOS-style list of today's reads, current/best streak, avg-per-day, a 14-day activity bar chart (`#ff6600` accent, no libraries), and top topics by reads; a destructive "Clear reading history" action is confirmed via `BottomSheet`. All numbers come from local `hnly_read_events`.
+- **Personalize** (`Home.js`) — a `mdi-tune-variant` pill, shown only while the **"All"** topic is selected, opens a bottom sheet where you pick up to 3 topics to "see more of" (stored in `hnly_personalize_topics`). When at least one is saved, the "All" feed is re-sorted by topic affinity derived from the explicit picks (strong boost) plus saves/reads (small boost) and hides (penalty), using a stable sort so engineering rank still breaks ties. The pill animates in/out as you switch topic chips and is never shown for the Algeria feed.
+- **Offline** (`sw.js` + Home/Comments) — the service worker (`sw.js`) caches the shell (`./`, `index.html`, `style.css`, `version.json`, `logo.png`) and revalidates CDN assets (engine, Tailwind, fonts, MDI) with stale-while-revalidate; cross-origin data/analytics stays network-only. On failed fetches, Home loads `hnly_offline_feed`/`hnly_offline_algeria` with an offline bar, and Comments loads `hnly_offline_comments` with a "cached" header.
 - **Search** (`Search.js`) — queries `https://hn.algolia.com/api/v1/search?tags=story` (350 ms debounce, 20 hits per page, "Load more"), maps hits to the post shape, and reuses `PostCard` — so search results get the exact same toolbar and read/dim behavior as the feed.
 
 ---

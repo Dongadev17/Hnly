@@ -62,13 +62,13 @@ const checkForUpdates = async (button) => {
             </div>
 
             <h2
-              class="mt-3 text-[22px] font-bold uppercase tracking-[-0.02em] text-white"
+              class="mt-3 text-[22px] font-bold uppercase tracking-[-0.026em] text-white"
             >
               Update available
             </h2>
 
             <p
-              class="mx-auto mt-1.5 max-w-[300px] text-[14px] leading-relaxed text-white/55"
+              class="mx-auto mt-1.5 max-w-[300px] text-[15px] leading-relaxed text-white/55"
             >
               A fresh version of ${APP_INFO.name} is ready. Smoother, faster,
               and better than ever.
@@ -175,7 +175,7 @@ const About = (params, el) => {
       <main class="px-3 pb-10 pt-5">
         <!-- Section: App -->
         <h3
-          class="px-4 pb-1.5 pt-1 text-[11px] font-medium uppercase tracking-[0.08em] text-white/35"
+          class="px-4 pb-1.5 pt-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/35"
         >
           App
         </h3>
@@ -196,12 +196,32 @@ const About = (params, el) => {
               ></span>
             </span>
 
-            <span class="flex-1 text-[15px] font-medium text-white">
+            <span class="flex-1 text-[15px] font-semibold text-white">
               Check for updates
             </span>
 
             <span
               class="update-icon mdi mdi-chevron-right shrink-0 text-[18px] text-white/30"
+            ></span>
+          </button>
+
+          <button
+            type="button"
+            data-route="stats"
+            class="flex min-h-[48px] w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-white/5"
+          >
+            <span
+              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] bg-[#3478f6]"
+            >
+              <span class="mdi mdi-chart-line text-[16px] text-white"></span>
+            </span>
+
+            <span class="flex-1 text-[15px] font-semibold text-white">
+              Reading stats
+            </span>
+
+            <span
+              class="mdi mdi-chevron-right shrink-0 text-[18px] text-white/30"
             ></span>
           </button>
 
@@ -218,7 +238,7 @@ const About = (params, el) => {
               ></span>
             </span>
 
-            <span class="flex-1 text-[15px] font-medium text-white">
+            <span class="flex-1 text-[15px] font-semibold text-white">
               Send feedback
             </span>
 
@@ -236,7 +256,7 @@ const About = (params, el) => {
               ></span>
             </span>
 
-            <span class="flex-1 text-[15px] font-medium text-white">
+            <span class="flex-1 text-[15px] font-semibold text-white">
               Version
             </span>
 
@@ -244,27 +264,11 @@ const About = (params, el) => {
               v${APP_INFO.version}
             </span>
           </div>
-
-          <div class="flex min-h-[48px] items-center gap-3 px-4 py-3">
-            <span
-              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] bg-[#2c2c2e]"
-            >
-              <span
-                class="mdi mdi-shield-check-outline text-[16px] text-white/60"
-              ></span>
-            </span>
-
-            <span class="flex-1 text-[15px] font-medium text-white">
-              Privacy
-            </span>
-
-            <span class="text-[15px] text-white/40">No tracking</span>
-          </div>
         </section>
 
         <!-- Section: Legal -->
         <h3
-          class="px-4 pb-1.5 pt-5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/35"
+          class="px-4 pb-1.5 pt-5 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/35"
         >
           Legal
         </h3>
@@ -285,7 +289,7 @@ const About = (params, el) => {
               ></span>
             </span>
 
-            <span class="flex-1 text-[15px] font-medium text-white">
+            <span class="flex-1 text-[15px] font-semibold text-white">
               Privacy Policy
             </span>
 
@@ -307,7 +311,7 @@ const About = (params, el) => {
               ></span>
             </span>
 
-            <span class="flex-1 text-[15px] font-medium text-white">
+            <span class="flex-1 text-[15px] font-semibold text-white">
               Terms &amp; Conditions
             </span>
 
@@ -319,7 +323,7 @@ const About = (params, el) => {
 
         <!-- Section: Donate -->
         <h3
-          class="px-4 pb-1.5 pt-5 text-[11px] font-medium uppercase tracking-[0.08em] text-white/35"
+          class="px-4 pb-1.5 pt-5 text-[12px] font-semibold uppercase tracking-[0.08em] text-white/35"
         >
           Donate
         </h3>
@@ -330,7 +334,7 @@ const About = (params, el) => {
           <div class="px-4 py-4">
             <div class="flex items-center gap-2">
               <span class="mdi mdi-heart text-[18px] text-[#ff6600]"></span>
-              <h4 class="text-[13px] font-semibold text-white">
+              <h4 class="text-[15px] font-semibold text-white">
                 Support development
               </h4>
             </div>
@@ -352,7 +356,7 @@ const About = (params, el) => {
               <button
                 type="button"
                 id="copyWalletBtn"
-                class="ripple-container flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-white px-4 text-[12px] font-semibold text-black transition-all active:scale-95"
+                class="ripple-container flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-white px-4 text-[13px] font-semibold text-black transition-all active:scale-95"
               >
                 <span class="mdi mdi-content-copy text-[14px]"></span>
                 Copy

@@ -45,8 +45,8 @@ const PostCard = (
     <article
       class="shrink-0 break-inside-avoid rounded-[24px] bg-[#1c1c1e] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
     >
-      <div class="flex items-center justify-between text-[11px] text-white/35">
-        <div class="flex min-w-0 items-center gap-1.5 font-medium">
+      <div class="flex items-center justify-between text-[11px] font-medium text-white/35">
+        <div class="flex min-w-0 items-center gap-1.5 font-semibold">
           ${age ? html`<span>${escapeHTML(age)}</span>` : html`<span></span>`}
           ${read
             ? html`<div
@@ -93,7 +93,7 @@ const PostCard = (
       ${post.description
         ? html`
             <p
-              class="mt-2 line-clamp-3 break-words text-[12px] leading-[1.45] ${read
+              class="mt-2 line-clamp-3 break-words text-[13px] leading-[1.45] ${read
                 ? "text-white/25"
                 : "text-white/40"}"
             >
@@ -108,7 +108,7 @@ const PostCard = (
               class="mt-3 hidden rounded-[14px] border border-white/10 bg-[#2c2c2e]/60 p-3"
             >
               <div
-                class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#ff6600]"
+                class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#ff6600]"
               >
                 <span class="mdi mdi-lightbulb-on-outline text-[13px]"></span>
                 Why this story?
